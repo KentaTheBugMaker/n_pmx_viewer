@@ -1,6 +1,6 @@
 mod convert_to_wgpu_model;
-mod ui;
 mod global_model_state;
+mod ui;
 
 use std::iter;
 use std::time::Instant;
@@ -14,12 +14,36 @@ use epi::*;
 use std::process::exit;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
+use crate::global_model_state::Model;
+use std::borrow::Cow;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
+static NOTO_SANS_JP_REGULAR:&[u8] = include_bytes!("../NotoSansJP-Regular.otf");
 /// A simple egui + wgpu + winit based example.
 fn main() {
+
+    let env = std::env::var("PMX_PATH").unwrap();
+    println!("{:?}", env);
+    let pmx = PMXUtil::pmx_loader::PMXLoader::open(env);
+    let (model_info, loader) = pmx.read_pmx_model_info();
+    let bones = loader
+        .read_pmx_vertices()
+        .1
+        .read_pmx_faces()
+        .1
+        .read_texture_list()
+        .1
+        .read_pmx_materials()
+        .1
+        .read_pmx_bones()
+        .0;
+    let mut model = Model::new(model_info);
+    model.load_bones(&bones);
+    println!("{}", model.bone_tree.dump_tree(0, &bones));
+
+
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
         .with_decorations(true)
@@ -61,7 +85,7 @@ fn main() {
         format: surface_format,
         width: size.width as u32,
         height: size.height as u32,
-        present_mode: wgpu::PresentMode::Mailbox,
+        present_mode: wgpu::PresentMode::Fifo,
     };
     surface.configure(&device, &surface_config);
     let mut tabs = Tabs(TabKind::View);
@@ -69,7 +93,16 @@ fn main() {
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
     let mut integration = egui_winit::State::new(&window);
     let mut egui_ctx = egui::CtxRef::default();
-
+    //to install japanese font start frame.
+    egui_ctx.begin_frame(egui::RawInput::default());
+    let mut fonts =egui_ctx.fonts().definitions().clone();
+    //install noto sans jp regular
+    fonts.font_data.insert("NotoSansCJK".to_string(), Cow::from(NOTO_SANS_JP_REGULAR));
+    fonts.fonts_for_family.values_mut().for_each(|x|{
+        x.push("NotoSansCJK".to_string())
+    });
+    egui_ctx.set_fonts(fonts);
+    egui_ctx.end_frame();
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
             let input = integration.take_egui_input(&window);
@@ -86,6 +119,9 @@ fn main() {
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             egui_ctx.begin_frame(input);
+            egui::Window::new("Bone tree").vscroll(true).show(&egui_ctx,|ui|{
+               model.bone_tree.display_in_collapsing_header(ui,&bones)
+            });
             egui::SidePanel::left("my_side_panel").show(&egui_ctx, |ui| {
                 ui.heading("Hello World!");
                 if ui.button("Quit").clicked() {}
@@ -93,7 +129,7 @@ fn main() {
             tabs.display_tabs(&egui_ctx);
             egui::Window::new("window").fixed_size(Vec2::new(300.0, 200.0));
             let (output, shapes) = egui_ctx.end_frame();
-            println!("{}", shapes.len());
+
             let meshes = egui_ctx.tessellate(shapes);
             egui_rpass.update_texture(&device, &queue, &egui_ctx.texture());
             egui_rpass.update_user_textures(&device, &queue);
@@ -129,8 +165,8 @@ fn main() {
 
             winit::event::Event::WindowEvent { event, .. } => {
                 if let winit::event::WindowEvent::Resized(physical_size) = event {
-                    surface_config.width = size.width;
-                    surface_config.height = size.height;
+                    surface_config.width = physical_size.width;
+                    surface_config.height = physical_size.height;
                     surface.configure(&device, &surface_config);
                 }
                 integration.on_event(&egui_ctx, &event);
