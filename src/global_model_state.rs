@@ -44,7 +44,7 @@ pub(crate) struct Model {
     ///パーツ
     //  parts:Vec<PMXPart>,
     ///ボーン木
-    pub(crate) bone_tree: BoneTree,
+    pub(crate) bone_tree: Option<BoneTree>,
 }
 #[derive(Debug)]
 pub struct BoneTree {
@@ -53,12 +53,6 @@ pub struct BoneTree {
 }
 
 impl BoneTree {
-    pub fn new() -> Self {
-        Self {
-            id: -1,
-            child: Default::default(),
-        }
-    }
     pub fn append(&mut self, child_index: i32, bone_info: PMXBone) {
         if self.id == bone_info.parent {
             //親IDが自分と一致したなら子供に入れる
@@ -121,15 +115,25 @@ impl Model {
             },
             textures: vec![],
             parts: vec![],*/
-            bone_tree: BoneTree::new(),
+            bone_tree: None,
         }
     }
     ///親のインデックスを見ながらツリーを作っていく
     ///
     pub fn load_bones(&mut self, bones: &[PMXBone]) {
+        let root = bones
+            .iter()
+            .enumerate()
+            .find(|(_, bone)| bone.parent == -1)
+            .unwrap();
+        let mut root_node = BoneTree {
+            id: root.0 as i32,
+            child: Default::default(),
+        };
         for (index, bone) in bones.iter().enumerate() {
-            self.bone_tree.append(index as i32, bone.clone());
+            root_node.append(index as i32, bone.clone());
         }
+        self.bone_tree.replace(root_node);
     }
 }
 #[test]

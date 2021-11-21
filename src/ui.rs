@@ -27,14 +27,14 @@ impl Tabs {
     }
 }
 pub struct EguiTreeView {
-    selected: Option<i32>,
+    pub(crate) selected: i32,
     bone_data_source: Vec<PMXBone>,
     bone_tree: BoneTree,
 }
 impl EguiTreeView {
     pub fn from_bone_tree(tree: BoneTree, data_source: &[PMXBone]) -> Self {
         Self {
-            selected: None,
+            selected: 0,
             bone_data_source: data_source.to_vec(),
             bone_tree: tree,
         }
@@ -52,7 +52,7 @@ impl EguiTreeView {
 fn display_in_collapsing_header(
     tree: &BoneTree,
     ui: &mut egui::Ui,
-    select: &mut Option<i32>,
+    select: &mut i32,
     data_source: &[PMXBone],
     indent_level: usize,
 ) {
@@ -69,9 +69,9 @@ fn display_in_collapsing_header(
 
     egui::Frame::none().show(ui, |ui| {
         ui.vertical(|ui| {
-            let label = egui::SelectableLabel::new(Some(tree.id) == *select, name);
+            let label = egui::SelectableLabel::new(tree.id == *select, name);
             if ui.add(label).clicked() {
-                select.replace(tree.id);
+                *select=tree.id;
                 println!("{} selected", tree.id);
             }
             for sub_tree in tree.child.values() {

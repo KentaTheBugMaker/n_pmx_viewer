@@ -27,7 +27,7 @@ fn main() {
     println!("{:?}", env);
     let pmx = PMXUtil::pmx_loader::PMXLoader::open(env);
     let (model_info, loader) = pmx.read_pmx_model_info();
-    let bones = loader
+    let mut bones = loader
         .read_pmx_vertices()
         .1
         .read_pmx_faces()
@@ -40,8 +40,11 @@ fn main() {
         .0;
     let mut model = Model::new(model_info);
     model.load_bones(&bones);
-    println!("{}", model.bone_tree.dump_tree(0, &bones));
-    let mut tree_view = ui::EguiTreeView::from_bone_tree(model.bone_tree, &bones);
+    println!("{}", model.bone_tree.as_ref().unwrap().dump_tree(0, &bones));
+    let mut tree_view = ui::EguiTreeView::from_bone_tree(model.bone_tree.unwrap(), &bones);
+
+
+
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
         .with_decorations(true)
@@ -104,6 +107,8 @@ fn main() {
         .for_each(|x| x.push("NotoSansCJK".to_string()));
     egui_ctx.set_fonts(fonts);
     egui_ctx.end_frame();
+    let mut current_bone_index = 0;
+    let mut rebuild_signal = false;
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
             let input = integration.take_egui_input(&window);
@@ -121,20 +126,35 @@ fn main() {
 
             egui_ctx.begin_frame(input);
             tabs.display_tabs(&egui_ctx);
+            egui::SidePanel::left("the left panel").min_width(250.0).show(&egui_ctx,|ui|{
+                match tabs.0 {
+                    TabKind::Bone => {
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            tree_view.display_tree(ui);
+                        });
+                    }
+                    TabKind::View => {}
+                    TabKind::TextureView => {}
+                    TabKind::Shader => {}
+                }
+            });
             egui::CentralPanel::default().show(&egui_ctx, |ui| match tabs.0 {
                 TabKind::Bone => {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        tree_view.display_tree(ui);
-                    });
+                    ui::EguiBoneParameterView::new(
+                        bones.get_mut(current_bone_index).unwrap(),
+                        &mut rebuild_signal,
+                    )
+                    .display_ui(ui);
+                    current_bone_index = tree_view.selected as usize;
                     ui.separator();
                 }
                 TabKind::View => {}
                 TabKind::TextureView => {}
                 TabKind::Shader => {}
             });
-
-            egui::Window::new("window").fixed_size(Vec2::new(300.0, 200.0));
             let (output, shapes) = egui_ctx.end_frame();
+
+
 
             let meshes = egui_ctx.tessellate(shapes);
             egui_rpass.update_texture(&device, &queue, &egui_ctx.texture());
