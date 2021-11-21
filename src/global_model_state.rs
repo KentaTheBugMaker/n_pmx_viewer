@@ -48,8 +48,8 @@ pub(crate) struct Model {
 }
 #[derive(Debug)]
 pub struct BoneTree {
-    id: i32,
-    child: BTreeMap<i32, BoneTree>,
+    pub(crate) id: i32,
+    pub(crate) child: BTreeMap<i32, BoneTree>,
 }
 
 impl BoneTree {
@@ -108,20 +108,7 @@ impl BoneTree {
         }
         dump_text
     }
-    pub fn display_in_collapsing_header(&self, ui: &mut egui::Ui, data_source: &[PMXBone]) {
-        let name = if self.id == -1 {
-            "Root"
-        } else {
-            &data_source[self.id as usize].name
-        };
-        egui::CollapsingHeader::new(name).default_open(true).show(ui,|ui|{
-            for sub_tree in self.child.values() {
-                sub_tree.display_in_collapsing_header(ui,data_source);
-            }
-        });
-    }
 }
-
 impl Model {
     pub fn new(model_info: PMXModelInfo) -> Self {
         Self {

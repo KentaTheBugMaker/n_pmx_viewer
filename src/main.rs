@@ -5,25 +5,24 @@ mod ui;
 use std::iter;
 use std::time::Instant;
 
+use crate::global_model_state::Model;
 use crate::ui::{TabKind, Tabs};
 use egui::{FontDefinitions, Vec2};
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
 use egui_wgpu_backend::{epi, wgpu, RenderPass, ScreenDescriptor};
 use egui_winit::winit;
 use epi::*;
+use std::borrow::Cow;
 use std::process::exit;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
-use crate::global_model_state::Model;
-use std::borrow::Cow;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
-static NOTO_SANS_JP_REGULAR:&[u8] = include_bytes!("../NotoSansJP-Regular.otf");
+static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
 /// A simple egui + wgpu + winit based example.
 fn main() {
-
     let env = std::env::var("PMX_PATH").unwrap();
     println!("{:?}", env);
     let pmx = PMXUtil::pmx_loader::PMXLoader::open(env);
@@ -42,8 +41,7 @@ fn main() {
     let mut model = Model::new(model_info);
     model.load_bones(&bones);
     println!("{}", model.bone_tree.dump_tree(0, &bones));
-
-
+    let mut tree_view = ui::EguiTreeView::from_bone_tree(model.bone_tree, &bones);
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
         .with_decorations(true)
@@ -95,12 +93,15 @@ fn main() {
     let mut egui_ctx = egui::CtxRef::default();
     //to install japanese font start frame.
     egui_ctx.begin_frame(egui::RawInput::default());
-    let mut fonts =egui_ctx.fonts().definitions().clone();
+    let mut fonts = egui_ctx.fonts().definitions().clone();
     //install noto sans jp regular
-    fonts.font_data.insert("NotoSansCJK".to_string(), Cow::from(NOTO_SANS_JP_REGULAR));
-    fonts.fonts_for_family.values_mut().for_each(|x|{
-        x.push("NotoSansCJK".to_string())
-    });
+    fonts
+        .font_data
+        .insert("NotoSansCJK".to_string(), Cow::from(NOTO_SANS_JP_REGULAR));
+    fonts
+        .fonts_for_family
+        .values_mut()
+        .for_each(|x| x.push("NotoSansCJK".to_string()));
     egui_ctx.set_fonts(fonts);
     egui_ctx.end_frame();
     event_loop.run(move |event, _, control_flow| {
@@ -119,14 +120,19 @@ fn main() {
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             egui_ctx.begin_frame(input);
-            egui::Window::new("Bone tree").vscroll(true).show(&egui_ctx,|ui|{
-               model.bone_tree.display_in_collapsing_header(ui,&bones)
-            });
-            egui::SidePanel::left("my_side_panel").show(&egui_ctx, |ui| {
-                ui.heading("Hello World!");
-                if ui.button("Quit").clicked() {}
-            });
             tabs.display_tabs(&egui_ctx);
+            egui::CentralPanel::default().show(&egui_ctx, |ui| match tabs.0 {
+                TabKind::Bone => {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        tree_view.display_tree(ui);
+                    });
+                    ui.separator();
+                }
+                TabKind::View => {}
+                TabKind::TextureView => {}
+                TabKind::Shader => {}
+            });
+
             egui::Window::new("window").fixed_size(Vec2::new(300.0, 200.0));
             let (output, shapes) = egui_ctx.end_frame();
 
