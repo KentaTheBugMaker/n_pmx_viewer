@@ -6,7 +6,7 @@ use std::iter;
 use std::time::Instant;
 
 use crate::global_model_state::{BoneTree, Model};
-use crate::ui::{EguiBoneView, Lang, TabKind, Tabs};
+use crate::ui::{EguiBoneView, Lang, PMXInfoView, TabKind, Tabs};
 use egui::{FontDefinitions, Vec2};
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
 use egui_wgpu_backend::{epi, wgpu, RenderPass, ScreenDescriptor};
@@ -27,7 +27,7 @@ fn main() {
     println!("{:?}", env);
     let pmx = PMXUtil::pmx_loader::PMXLoader::open(env);
     let (model_info, loader) = pmx.read_pmx_model_info();
-    let mut bones = loader
+    let (bones, loader) = loader
         .read_pmx_vertices()
         .1
         .read_pmx_faces()
@@ -36,10 +36,13 @@ fn main() {
         .1
         .read_pmx_materials()
         .1
-        .read_pmx_bones()
-        .0;
-    let mut model = Model::new(model_info);
-    model.load_bones(&bones);
+        .read_pmx_bones();
+    let mut pmx_info_view = PMXInfoView {
+        header: loader.get_header(),
+        model_info,
+        encode: loader.get_header().encode.into(),
+        lang: Lang::Japanese,
+    };
     let bone_tree = BoneTree::from_iter(bones.iter());
     let mut bone_view = EguiBoneView {
         bones: bones.clone(),
@@ -92,7 +95,7 @@ fn main() {
         present_mode: wgpu::PresentMode::Fifo,
     };
     surface.configure(&device, &surface_config);
-    let mut tabs = Tabs(TabKind::View);
+    let mut tabs = Tabs(TabKind::Info);
     // We use the egui_wgpu_backend crate as the render backend.
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
     let mut integration = egui_winit::State::new(&window);
@@ -130,12 +133,16 @@ fn main() {
 
             tabs.display_tabs(&egui_ctx);
             egui::CentralPanel::default().show(&egui_ctx, |ui| match tabs.0 {
+                TabKind::Info => {
+                    pmx_info_view.display(ui);
+                }
                 TabKind::Bone => {
                     bone_view.display(ui);
                 }
                 TabKind::View => {}
                 TabKind::TextureView => {}
                 TabKind::Shader => {}
+                _ => {}
             });
 
             let (output, shapes) = egui_ctx.end_frame();

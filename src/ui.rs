@@ -1,11 +1,20 @@
 use crate::global_model_state::BoneTree;
 use egui::containers::panel::TopBottomSide;
-use egui::{Color32, Style};
-use PMXUtil::pmx_types::pmx_types::PMXBone;
+
+use PMXUtil::pmx_types::pmx_types::{PMXBone, PMXHeaderRust, PMXModelInfo};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TabKind {
+    Info,
+    Vertex,
+    Face,
+    Material,
     Bone,
+    Morph,
+    Frame,
+    RigidBody,
+    Joint,
+    SoftBody,
     View,
     TextureView,
     Shader,
@@ -15,6 +24,7 @@ impl Tabs {
     pub(crate) fn display_tabs(&mut self, ctx: &egui::CtxRef) {
         egui::TopBottomPanel::new(TopBottomSide::Top, "Tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.0, TabKind::Info, "Info");
                 ui.selectable_value(&mut self.0, TabKind::Bone, "Bone");
                 ui.selectable_value(&mut self.0, TabKind::View, "View");
                 ui.selectable_value(&mut self.0, TabKind::TextureView, "uv");
@@ -74,17 +84,19 @@ pub struct EguiBoneView {
 impl EguiBoneView {
     pub fn display(&mut self, ui: &mut egui::Ui) {
         //lets create tree view
-        egui::containers::SidePanel::left("Bone tree view").min_width(270.0).show_inside(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                display_in_collapsing_header(
-                    &self.bone_tree,
-                    ui,
-                    &mut self.current_displaying_bone,
-                    &self.bones,
-                    0,
-                )
+        egui::containers::SidePanel::left("Bone tree view")
+            .min_width(270.0)
+            .show_inside(ui, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    display_in_collapsing_header(
+                        &self.bone_tree,
+                        ui,
+                        &mut self.current_displaying_bone,
+                        &self.bones,
+                        0,
+                    )
+                });
             });
-        });
         //lets create bone parameter view
         let mut cloned_bone = self
             .bones
@@ -126,13 +138,13 @@ impl EguiBoneView {
                     {
                         rebuilt_tree = true;
                     }
-                    let parent_name=if cloned_bone.parent == -1 {
+                    let parent_name = if cloned_bone.parent == -1 {
                         "-"
-                    }else{
-                        let parent=self.bones.get(cloned_bone.parent as usize).unwrap();
-                        match self.lang{
-                            Lang::English => {&parent.english_name}
-                            Lang::Japanese => {&parent.name}
+                    } else {
+                        let parent = self.bones.get(cloned_bone.parent as usize).unwrap();
+                        match self.lang {
+                            Lang::English => &parent.english_name,
+                            Lang::Japanese => &parent.name,
                         }
                     };
                     ui.label(parent_name);
@@ -147,7 +159,7 @@ impl EguiBoneView {
                 .unwrap() = cloned_bone;
         }
         //親ボーンを変更したのでツリー組み立てなおし
-        if rebuilt_tree{
+        if rebuilt_tree {
             self.bone_tree = BoneTree::from_iter(self.bones.iter());
         }
     }
@@ -202,5 +214,93 @@ impl From<u16> for PMXBoneFlags {
 impl Into<u16> for PMXBoneFlags {
     fn into(self) -> u16 {
         0
+    }
+}
+
+pub struct PMXInfoView {
+    pub(crate) header: PMXHeaderRust,
+    pub(crate) model_info: PMXModelInfo,
+    pub(crate) encode: Encode,
+    pub(crate) lang: Lang,
+}
+impl PMXInfoView {
+    pub(crate) fn display(&mut self, ui: &mut egui::Ui) {
+        egui::Frame::none().show(ui, |ui| {
+            ui.vertical(|ui| {
+                ui.label("System");
+                egui::Frame::none().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("PMX Version : {}", self.header.version));
+                        ui.label("character encoding :");
+                        egui::ComboBox::from_label("")
+                            .selected_text(self.encode.to_string())
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.encode,
+                                    Encode::UTF16LE,
+                                    Encode::UTF16LE.to_string(),
+                                );
+                                ui.selectable_value(
+                                    &mut self.encode,
+                                    Encode::UTF8,
+                                    Encode::UTF8.to_string(),
+                                );
+                            });
+                        ui.label("additional uvs");
+                        egui::ComboBox::from_label("uvs")
+                            .selected_text(self.header.additional_uv)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.header.additional_uv, 0, 0);
+                                ui.selectable_value(&mut self.header.additional_uv, 1, 1);
+                                ui.selectable_value(&mut self.header.additional_uv, 2, 2);
+                                ui.selectable_value(&mut self.header.additional_uv, 3, 3);
+                                ui.selectable_value(&mut self.header.additional_uv, 4, 4);
+                            });
+                    });
+                });
+
+                egui::Frame::none().show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("model name");
+                            let name = match self.lang {
+                                Lang::English => &mut self.model_info.name_en,
+                                Lang::Japanese => &mut self.model_info.name,
+                            };
+                            ui.text_edit_singleline(name);
+                            ui.selectable_value(&mut self.lang, Lang::Japanese, "日");
+                            ui.selectable_value(&mut self.lang, Lang::English, "英");
+                        });
+                        ui.label("comment");
+                        let comment = match self.lang {
+                            Lang::English => &mut self.model_info.comment_en,
+                            Lang::Japanese => &mut self.model_info.comment,
+                        };
+                        ui.text_edit_multiline(comment);
+                    })
+                });
+            });
+        });
+    }
+}
+#[derive(Eq, PartialEq, Copy, Clone)]
+pub(crate) enum Encode {
+    UTF16LE,
+    UTF8,
+}
+impl From<PMXUtil::pmx_types::pmx_types::Encode> for Encode {
+    fn from(encode: PMXUtil::pmx_types::pmx_types::Encode) -> Self {
+        match encode {
+            PMXUtil::pmx_types::pmx_types::Encode::UTF8 => Self::UTF8,
+            PMXUtil::pmx_types::pmx_types::Encode::Utf16Le => Self::UTF16LE,
+        }
+    }
+}
+impl ToString for Encode {
+    fn to_string(&self) -> String {
+        match self {
+            Encode::UTF16LE => "UTF-16(LE)".to_string(),
+            Encode::UTF8 => "UTF-8".to_string(),
+        }
     }
 }
