@@ -26,29 +26,7 @@ impl Tabs {
         self.0
     }
 }
-pub struct EguiTreeView {
-    pub(crate) selected: i32,
-    bone_data_source: Vec<PMXBone>,
-    bone_tree: BoneTree,
-}
-impl EguiTreeView {
-    pub fn from_bone_tree(tree: BoneTree, data_source: &[PMXBone]) -> Self {
-        Self {
-            selected: 0,
-            bone_data_source: data_source.to_vec(),
-            bone_tree: tree,
-        }
-    }
-    pub fn display_tree(&mut self, ui: &mut egui::Ui) {
-        display_in_collapsing_header(
-            &self.bone_tree,
-            ui,
-            &mut self.selected,
-            &self.bone_data_source,
-            0,
-        );
-    }
-}
+
 fn display_in_collapsing_header(
     tree: &BoneTree,
     ui: &mut egui::Ui,
@@ -71,7 +49,7 @@ fn display_in_collapsing_header(
         ui.vertical(|ui| {
             let label = egui::SelectableLabel::new(tree.id == *select, name);
             if ui.add(label).clicked() {
-                *select=tree.id;
+                *select = tree.id;
                 println!("{} selected", tree.id);
             }
             for sub_tree in tree.child.values() {
@@ -80,54 +58,149 @@ fn display_in_collapsing_header(
         });
     });
 }
-#[derive(Debug,Copy, Clone,Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Lang {
     English,
     Japanese,
 }
-pub struct EguiBoneParameterView<'a> {
-    lang: Lang,
-    bone: &'a mut PMXBone,
-    rebuild_signal: &'a bool,
-    after_physics:bool
+
+pub struct EguiBoneView {
+    pub(crate) bones: Vec<PMXBone>,
+    pub(crate) current_displaying_bone: i32,
+    pub(crate) bone_tree: BoneTree,
+    pub(crate) lang: Lang,
 }
-impl<'a> EguiBoneParameterView<'a> {
-    pub fn new(bone: &'a mut PMXBone, rebuild_signal: &'a mut bool) -> Self {
-        Self {
-            lang: Lang::Japanese,
-            bone,
-            rebuild_signal,
-            after_physics: false
-        }
-    }
-    pub fn display_ui(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::none().show(ui, |ui| {
+
+impl EguiBoneView {
+    pub fn display(&mut self, ui: &mut egui::Ui) {
+        //lets create tree view
+        egui::containers::SidePanel::left("Bone tree view").min_width(270.0).show_inside(ui, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                display_in_collapsing_header(
+                    &self.bone_tree,
+                    ui,
+                    &mut self.current_displaying_bone,
+                    &self.bones,
+                    0,
+                )
+            });
+        });
+        //lets create bone parameter view
+        let mut cloned_bone = self
+            .bones
+            .get(self.current_displaying_bone as usize)
+            .unwrap()
+            .clone();
+        let mut bone_flags = PMXBoneFlags::from(cloned_bone.boneflag);
+        let mut rebuilt_tree = false;
+        let mut update_bone = false;
+        egui::containers::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.label("ボーン名");
-                    match self.lang {
-                        Lang::English => {
-                            ui.text_edit_singleline(&mut self.bone.english_name);
-                        }
-                        Lang::Japanese => {
-                            ui.text_edit_singleline(&mut self.bone.name);
-                        }
+                    if match self.lang {
+                        Lang::English => ui.text_edit_singleline(&mut cloned_bone.english_name),
+                        Lang::Japanese => ui.text_edit_singleline(&mut cloned_bone.name),
+                    }
+                    .changed()
+                    {
+                        update_bone = true;
                     }
                     ui.selectable_value(&mut self.lang, Lang::Japanese, "日");
                     ui.selectable_value(&mut self.lang, Lang::English, "英");
                     ui.label("変形階層");
-                   // ui.radio_value()
-                    //ui.checkbox();
+                    let deform = egui::DragValue::new(&mut cloned_bone.deform_depth);
+                    if ui.add(deform).changed() {
+                        update_bone = true;
+                    }
+                    ui.checkbox(&mut bone_flags.deform_after_physics, "物理後");
                 });
-                ui.horizontal(|ui|{
-                   ui.label("位置");
-
+                ui.horizontal(|ui| {
+                    ui.label("位置");
                 });
-                ui.horizontal(|ui|{
+                ui.horizontal(|ui| {
                     ui.label("親ボーン");
-
-                })
+                    if ui
+                        .add(egui::DragValue::new(&mut cloned_bone.parent))
+                        .changed()
+                    {
+                        rebuilt_tree = true;
+                    }
+                    let parent_name=if cloned_bone.parent == -1 {
+                        "-"
+                    }else{
+                        let parent=self.bones.get(cloned_bone.parent as usize).unwrap();
+                        match self.lang{
+                            Lang::English => {&parent.english_name}
+                            Lang::Japanese => {&parent.name}
+                        }
+                    };
+                    ui.label(parent_name);
+                });
             })
         });
+        //ボーン情報更新
+        if update_bone {
+            *self
+                .bones
+                .get_mut(self.current_displaying_bone as usize)
+                .unwrap() = cloned_bone;
+        }
+        //親ボーンを変更したのでツリー組み立てなおし
+        if rebuilt_tree{
+            self.bone_tree = BoneTree::from_iter(self.bones.iter());
+        }
+    }
+}
+/// the rust friendly PMX Bone flag representation
+#[derive(Clone, Copy)]
+struct PMXBoneFlags {
+    is_target_is_other_bone: bool,
+    deform_after_physics: bool, //0x1000
+    allow_rotate: bool,
+    allow_translate: bool,
+    flag1: bool,
+}
+impl PMXBoneFlags {
+    fn none() -> Self {
+        Self {
+            is_target_is_other_bone: false,
+            deform_after_physics: false,
+            allow_rotate: false,
+            allow_translate: false,
+            flag1: false,
+        }
+    }
+}
+impl From<u16> for PMXBoneFlags {
+    fn from(raw_bone_flag: u16) -> Self {
+        let mut bone_flag = Self::none();
+        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
+            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
+        {
+            bone_flag.deform_after_physics = true;
+        }
+        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
+            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
+        {
+            bone_flag.is_target_is_other_bone = true;
+        }
+        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
+            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
+        {
+            bone_flag.allow_rotate = true;
+        }
+        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
+            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
+        {
+            bone_flag.allow_translate = true;
+        }
+
+        bone_flag
+    }
+}
+impl Into<u16> for PMXBoneFlags {
+    fn into(self) -> u16 {
+        0
     }
 }

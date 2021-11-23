@@ -2,6 +2,7 @@ use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
+use std::iter::FromIterator;
 use std::rc::Rc;
 use PMXUtil::pmx_types::pmx_types::{PMXBone, PMXModelInfo};
 
@@ -53,6 +54,21 @@ pub struct BoneTree {
 }
 
 impl BoneTree {
+    pub fn from_iter<'a>(iter: impl Iterator<Item = &'a PMXBone> + Clone) -> Self {
+        let root = iter
+            .clone()
+            .enumerate()
+            .find(|(_, bone)| bone.parent == -1)
+            .unwrap();
+        let mut root_node = BoneTree {
+            id: root.0 as i32,
+            child: Default::default(),
+        };
+        for (index, bone) in iter.enumerate() {
+            root_node.append(index as i32, bone.clone());
+        }
+        root_node
+    }
     pub fn append(&mut self, child_index: i32, bone_info: PMXBone) {
         if self.id == bone_info.parent {
             //親IDが自分と一致したなら子供に入れる
