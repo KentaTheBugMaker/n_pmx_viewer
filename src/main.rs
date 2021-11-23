@@ -3,19 +3,16 @@ mod global_model_state;
 mod ui;
 
 use std::iter;
-use std::time::Instant;
 
-use crate::global_model_state::{BoneTree, Model};
+use crate::global_model_state::BoneTree;
 use crate::ui::{EguiBoneView, Lang, PMXInfoView, TabKind, Tabs};
-use egui::{FontDefinitions, Vec2};
+
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
 use egui_wgpu_backend::{epi, wgpu, RenderPass, ScreenDescriptor};
 use egui_winit::winit;
 use epi::*;
 use std::borrow::Cow;
 use std::process::exit;
-use winit::event::Event::*;
-use winit::event_loop::ControlFlow;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
@@ -75,7 +72,7 @@ fn main() {
     }))
     .unwrap();
 
-    let (mut device, mut queue) = pollster::block_on(adapter.request_device(
+    let (device, queue) = pollster::block_on(adapter.request_device(
         &wgpu::DeviceDescriptor {
             features: wgpu::Features::default(),
             limits: wgpu::Limits::default(),
@@ -145,7 +142,7 @@ fn main() {
                 _ => {}
             });
 
-            let (output, shapes) = egui_ctx.end_frame();
+            let (_output, shapes) = egui_ctx.end_frame();
 
             let meshes = egui_ctx.tessellate(shapes);
             egui_rpass.update_texture(&device, &queue, &egui_ctx.texture());
