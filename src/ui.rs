@@ -1,7 +1,9 @@
 use crate::global_model_state::BoneTree;
 use egui::containers::panel::TopBottomSide;
 
-use PMXUtil::pmx_types::pmx_types::{PMXBone, PMXHeaderRust, PMXModelInfo};
+use PMXUtil::pmx_types::pmx_types::{
+    PMXBone, PMXHeaderRust, PMXModelInfo, PMXVertex, PMXVertexWeight,
+};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TabKind {
@@ -25,6 +27,7 @@ impl Tabs {
         egui::TopBottomPanel::new(TopBottomSide::Top, "Tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.0, TabKind::Info, "Info");
+                ui.selectable_value(&mut self.0, TabKind::Vertex, "Vertex");
                 ui.selectable_value(&mut self.0, TabKind::Bone, "Bone");
                 ui.selectable_value(&mut self.0, TabKind::View, "View");
                 ui.selectable_value(&mut self.0, TabKind::TextureView, "uv");
@@ -301,6 +304,196 @@ impl ToString for Encode {
         match self {
             Encode::UTF16LE => "UTF-16(LE)".to_string(),
             Encode::UTF8 => "UTF-8".to_string(),
+        }
+    }
+}
+pub struct PMXVertexView {
+    vertices: Vec<PMXVertex>,
+    selected: usize,
+    display_sdef_parameter: bool,
+    update_vertices: bool,
+}
+impl PMXVertexView {
+    pub fn new(vertices: Vec<PMXVertex>) -> Self {
+        Self {
+            vertices,
+            selected: 0,
+            display_sdef_parameter: false,
+            update_vertices: true,
+        }
+    }
+    pub fn display(&mut self, ui: &mut egui::Ui) {
+        egui::SidePanel::left("Vertices").show_inside(ui, |ui| {
+            egui::ScrollArea::vertical().show(ui,|ui|{
+                for (index, vertices) in self.vertices.iter().enumerate() {
+                    if ui.add(egui::SelectableLabel::new(
+                        self.selected == index,
+                        format!("{}: {:?}", index, vertices.position),
+                    )).clicked() {
+                        self.selected = index;
+                    }
+                }
+            });
+        });
+        let mut cloned_vertex = self.vertices[self.selected].clone();
+        let mut weight_kind = cloned_vertex.weight_type.into();
+        let mut weight_parameters:WeightParameters = cloned_vertex.weight_type.into();
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    //position and normal
+                    egui::Frame::none().show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            //position
+                            ui.horizontal(|ui| {
+                                ui.label("position x:");
+                                ui.add(egui::DragValue::new(&mut cloned_vertex.position[0]));
+                                ui.label("y:");
+                                ui.add(egui::DragValue::new(&mut cloned_vertex.position[1]));
+                                ui.label("z:");
+                                ui.add(egui::DragValue::new(&mut cloned_vertex.position[2]));
+                            });
+                            //normal
+                            ui.horizontal(|ui| {
+                                ui.label("normal x:");
+                                ui.add(egui::DragValue::new(&mut cloned_vertex.norm[0]));
+                                ui.label("y:");
+                                ui.add(egui::DragValue::new(&mut cloned_vertex.norm[1]));
+                                ui.label("z:");
+                                ui.add(egui::DragValue::new(&mut cloned_vertex.norm[2]));
+                            });
+                        });
+                    });
+                    //edge mag
+                    ui.label("edge magnifier");
+                    ui.add(egui::DragValue::new(&mut cloned_vertex.edge_mag));
+                });
+                //uv
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("UV: u");
+                        ui.add(egui::DragValue::new(&mut cloned_vertex.uv[0]));
+                        ui.label("v");
+                        ui.add(egui::DragValue::new(&mut cloned_vertex.uv[1]));
+                        ui.add(egui::Label::new("※追加UVの有効数設定はInfoから設定"));
+                    });
+                });
+                //bone weight
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            egui::ComboBox::from_label("変形方式").selected_text(weight_kind).show_ui(ui, |ui| {
+                                ui.selectable_value(&mut weight_kind, WeightKind::BDEF1, "BDEF1");
+                                ui.selectable_value(&mut weight_kind, WeightKind::BDEF2, "BDEF2");
+                                ui.selectable_value(&mut weight_kind, WeightKind::BDEF4, "BDEF4");
+                                ui.selectable_value(&mut weight_kind, WeightKind::SDEF, "SDEF");
+                                ui.selectable_value(&mut weight_kind, WeightKind::QDEF, "QDEF");
+                            });
+                        });
+                        ui.vertical(|ui|{
+                            ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[0]));
+                            ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[1]));
+                            ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[2]));
+                            ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[3]));
+                        });
+                        ui.vertical(|ui|{
+                            ui.add(egui::DragValue::new(&mut weight_parameters.weights[0]));
+                            ui.add(egui::DragValue::new(&mut weight_parameters.weights[1]));
+                            ui.add(egui::DragValue::new(&mut weight_parameters.weights[2]));
+                            ui.add(egui::DragValue::new(&mut weight_parameters.weights[3]));
+                        });
+                    });
+                })
+            });
+        });
+    }
+}
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum WeightKind {
+    BDEF1,
+    BDEF2,
+    BDEF4,
+    SDEF,
+    QDEF,
+}
+impl ToString for WeightKind{
+    fn to_string(&self) -> String {
+        match self {
+            WeightKind::BDEF1 => {"BDEF1"}
+            WeightKind::BDEF2 => {"BDEF2"}
+            WeightKind::BDEF4 => {"BDEF4"}
+            WeightKind::SDEF => {"SDEF"}
+            WeightKind::QDEF => {"QDEF"}
+        }.to_string()
+    }
+}
+impl From<PMXVertexWeight> for WeightKind {
+    fn from(weight: PMXVertexWeight) -> Self {
+        match weight {
+            PMXVertexWeight::BDEF1(_) => WeightKind::BDEF1,
+            PMXVertexWeight::BDEF2 { .. } => WeightKind::BDEF2,
+            PMXVertexWeight::BDEF4 { .. } => WeightKind::BDEF4,
+            PMXVertexWeight::SDEF { .. } => WeightKind::SDEF,
+            PMXVertexWeight::QDEF { .. } => WeightKind::QDEF,
+        }
+    }
+}
+struct WeightParameters {
+    weights: [f32; 4],
+    bone_indices: [i32; 4],
+}
+impl From<PMXVertexWeight> for WeightParameters {
+    fn from(weight: PMXVertexWeight) -> Self {
+        match weight {
+            PMXVertexWeight::BDEF1(x) => Self {
+                weights: [1.0, 0.0, 0.0, 0.0],
+                bone_indices: [x, -1, -1, -1],
+            },
+            PMXVertexWeight::BDEF2 {
+                bone_index_1,
+                bone_index_2,
+                bone_weight_1,
+            } => Self {
+                weights: [bone_weight_1, 1.0 - bone_weight_1, 0.0, 0.0],
+                bone_indices: [bone_index_1, bone_index_2, -1, -1],
+            },
+            PMXVertexWeight::BDEF4 {
+                bone_index_1,
+                bone_index_2,
+                bone_index_3,
+                bone_index_4,
+                bone_weight_1,
+                bone_weight_2,
+                bone_weight_3,
+                bone_weight_4,
+            } => Self {
+                weights: [bone_weight_1, bone_weight_2, bone_weight_3, bone_weight_4],
+                bone_indices: [bone_index_1, bone_index_2, bone_index_3, bone_index_4],
+            },
+            PMXVertexWeight::SDEF {
+                bone_index_1,
+                bone_index_2,
+                bone_weight_1,
+                sdef_c,
+                sdef_r0,
+                sdef_r1,
+            } => Self {
+                weights: [bone_weight_1, 1.0 - bone_weight_1, 0.0, 0.0],
+                bone_indices: [bone_index_1, bone_index_2, -1, -1],
+            },
+            PMXVertexWeight::QDEF {
+                bone_index_1,
+                bone_index_2,
+                bone_index_3,
+                bone_index_4,
+                bone_weight_1,
+                bone_weight_2,
+                bone_weight_3,
+                bone_weight_4,
+            } => Self {
+                weights: [bone_weight_1, bone_weight_2, bone_weight_3, bone_weight_4],
+                bone_indices: [bone_index_1, bone_index_2, bone_index_3, bone_index_4],
+            },
         }
     }
 }

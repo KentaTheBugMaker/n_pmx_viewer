@@ -5,7 +5,7 @@ mod ui;
 use std::iter;
 
 use crate::global_model_state::BoneTree;
-use crate::ui::{EguiBoneView, Lang, PMXInfoView, TabKind, Tabs};
+use crate::ui::{EguiBoneView, Lang, PMXInfoView, TabKind, Tabs, PMXVertexView};
 
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
 use egui_wgpu_backend::{epi, wgpu, RenderPass, ScreenDescriptor};
@@ -24,9 +24,8 @@ fn main() {
     println!("{:?}", env);
     let pmx = PMXUtil::pmx_loader::PMXLoader::open(env);
     let (model_info, loader) = pmx.read_pmx_model_info();
+    let (vertices,loader) =loader.read_pmx_vertices();
     let (bones, loader) = loader
-        .read_pmx_vertices()
-        .1
         .read_pmx_faces()
         .1
         .read_texture_list()
@@ -40,6 +39,7 @@ fn main() {
         encode: loader.get_header().encode.into(),
         lang: Lang::Japanese,
     };
+    let mut pmx_vertex_view = PMXVertexView::new(vertices);
     let bone_tree = BoneTree::from_iter(bones.iter());
     let mut bone_view = EguiBoneView {
         bones: bones.clone(),
@@ -133,9 +133,13 @@ fn main() {
                 TabKind::Info => {
                     pmx_info_view.display(ui);
                 }
+                TabKind::Vertex=>{
+                    pmx_vertex_view.display(ui);
+                }
                 TabKind::Bone => {
                     bone_view.display(ui);
                 }
+
                 TabKind::View => {}
                 TabKind::TextureView => {}
                 TabKind::Shader => {}
