@@ -214,8 +214,9 @@ impl From<u16> for PMXBoneFlags {
         bone_flag
     }
 }
-impl Into<u16> for PMXBoneFlags {
-    fn into(self) -> u16 {
+
+impl From<PMXBoneFlags> for u16 {
+    fn from(_: PMXBoneFlags) -> Self {
         0
     }
 }
@@ -225,8 +226,19 @@ pub struct PMXInfoView {
     pub(crate) model_info: PMXModelInfo,
     pub(crate) encode: Encode,
     pub(crate) lang: Lang,
+    additonal_uvs_changed: bool,
 }
 impl PMXInfoView {
+    pub fn new(header: PMXHeaderRust, model_info: PMXModelInfo) -> Self {
+        let encode = header.encode.into();
+        Self {
+            header,
+            model_info,
+            encode,
+            lang: Lang::Japanese,
+            additonal_uvs_changed: false,
+        }
+    }
     pub(crate) fn display(&mut self, ui: &mut egui::Ui) {
         egui::Frame::none().show(ui, |ui| {
             ui.vertical(|ui| {
@@ -250,6 +262,7 @@ impl PMXInfoView {
                                 );
                             });
                         ui.label("additional uvs");
+                        let saved_addtional_uvs = self.header.additional_uv;
                         egui::ComboBox::from_label("uvs")
                             .selected_text(self.header.additional_uv)
                             .show_ui(ui, |ui| {
@@ -259,6 +272,9 @@ impl PMXInfoView {
                                 ui.selectable_value(&mut self.header.additional_uv, 3, 3);
                                 ui.selectable_value(&mut self.header.additional_uv, 4, 4);
                             });
+                        if saved_addtional_uvs != self.header.additional_uv {
+                            self.additonal_uvs_changed = true;
+                        }
                     });
                 });
 
@@ -284,6 +300,14 @@ impl PMXInfoView {
                 });
             });
         });
+    }
+    pub fn query_updated_header(&mut self) -> Option<PMXHeaderRust> {
+        if self.additonal_uvs_changed {
+            self.additonal_uvs_changed = false;
+            Some(self.header.clone())
+        } else {
+            None
+        }
     }
 }
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -312,24 +336,41 @@ pub struct PMXVertexView {
     selected: usize,
     display_sdef_parameter: bool,
     update_vertices: bool,
+    header: PMXHeaderRust,
+    bones: Vec<PMXBone>,
+    selected_uv: u8,
+    lang: Lang,
 }
 impl PMXVertexView {
-    pub fn new(vertices: Vec<PMXVertex>) -> Self {
+    pub fn new(vertices: Vec<PMXVertex>, header: PMXHeaderRust, bones: &[PMXBone]) -> Self {
         Self {
             vertices,
             selected: 0,
             display_sdef_parameter: false,
             update_vertices: true,
+            header,
+            bones: Vec::from(bones),
+            selected_uv: 0,
+            lang: Lang::Japanese,
         }
+    }
+    pub fn update_header(&mut self, header: PMXHeaderRust) {
+        self.header = header;
+    }
+    pub fn update_bone(&mut self, bones: &[PMXBone]) {
+        self.bones = bones.to_vec();
     }
     pub fn display(&mut self, ui: &mut egui::Ui) {
         egui::SidePanel::left("Vertices").show_inside(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui,|ui|{
+            egui::ScrollArea::vertical().show(ui, |ui| {
                 for (index, vertices) in self.vertices.iter().enumerate() {
-                    if ui.add(egui::SelectableLabel::new(
-                        self.selected == index,
-                        format!("{}: {:?}", index, vertices.position),
-                    )).clicked() {
+                    if ui
+                        .add(egui::SelectableLabel::new(
+                            self.selected == index,
+                            format!("{}: {:?}", index, vertices.position),
+                        ))
+                        .clicked()
+                    {
                         self.selected = index;
                     }
                 }
@@ -337,7 +378,7 @@ impl PMXVertexView {
         });
         let mut cloned_vertex = self.vertices[self.selected].clone();
         let mut weight_kind = cloned_vertex.weight_type.into();
-        let mut weight_parameters:WeightParameters = cloned_vertex.weight_type.into();
+        let mut weight_parameters: WeightParameters = cloned_vertex.weight_type.into();
         egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
@@ -377,31 +418,87 @@ impl PMXVertexView {
                         ui.add(egui::DragValue::new(&mut cloned_vertex.uv[1]));
                         ui.add(egui::Label::new("※追加UVの有効数設定はInfoから設定"));
                     });
+                    ui.horizontal(|ui| {
+                        egui::ComboBox::from_id_source("AdditionalUV select").show_ui(ui, |ui| {
+                            for i in 0..self.header.additional_uv {
+                                ui.selectable_value(
+                                    &mut self.selected_uv,
+                                    i,
+                                    format!("Addtional UV {}", i),
+                                );
+                            }
+                        });
+                        ui.label("x");
+                        ui.add(egui::DragValue::new(
+                            &mut cloned_vertex.add_uv[self.selected_uv as usize][0],
+                        ));
+                        ui.label("y");
+                        ui.add(egui::DragValue::new(
+                            &mut cloned_vertex.add_uv[self.selected_uv as usize][1],
+                        ));
+                        ui.label("z");
+                        ui.add(egui::DragValue::new(
+                            &mut cloned_vertex.add_uv[self.selected_uv as usize][2],
+                        ));
+                        ui.label("w");
+                        ui.add(egui::DragValue::new(
+                            &mut cloned_vertex.add_uv[self.selected_uv as usize][3],
+                        ));
+                    });
                 });
                 //bone weight
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
-                            egui::ComboBox::from_label("変形方式").selected_text(weight_kind).show_ui(ui, |ui| {
-                                ui.selectable_value(&mut weight_kind, WeightKind::BDEF1, "BDEF1");
-                                ui.selectable_value(&mut weight_kind, WeightKind::BDEF2, "BDEF2");
-                                ui.selectable_value(&mut weight_kind, WeightKind::BDEF4, "BDEF4");
-                                ui.selectable_value(&mut weight_kind, WeightKind::SDEF, "SDEF");
-                                ui.selectable_value(&mut weight_kind, WeightKind::QDEF, "QDEF");
-                            });
+                            egui::ComboBox::from_label("変形方式")
+                                .selected_text(weight_kind)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut weight_kind,
+                                        WeightKind::BDEF1,
+                                        "BDEF1",
+                                    );
+                                    ui.selectable_value(
+                                        &mut weight_kind,
+                                        WeightKind::BDEF2,
+                                        "BDEF2",
+                                    );
+                                    ui.selectable_value(
+                                        &mut weight_kind,
+                                        WeightKind::BDEF4,
+                                        "BDEF4",
+                                    );
+                                    ui.selectable_value(&mut weight_kind, WeightKind::Sdef, "SDEF");
+                                    ui.selectable_value(&mut weight_kind, WeightKind::Qdef, "QDEF");
+                                });
                         });
-                        ui.vertical(|ui|{
+                        ui.vertical(|ui| {
                             ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[0]));
                             ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[1]));
                             ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[2]));
                             ui.add(egui::DragValue::new(&mut weight_parameters.bone_indices[3]));
                         });
-                        ui.vertical(|ui|{
+                        ui.vertical(|ui| {
                             ui.add(egui::DragValue::new(&mut weight_parameters.weights[0]));
                             ui.add(egui::DragValue::new(&mut weight_parameters.weights[1]));
                             ui.add(egui::DragValue::new(&mut weight_parameters.weights[2]));
                             ui.add(egui::DragValue::new(&mut weight_parameters.weights[3]));
                         });
+                        let fetch_bone_name = |index: i32| -> &str {
+                            match self.bones.get(index as usize) {
+                                None => "-",
+                                Some(bone) => match self.lang {
+                                    Lang::English => &bone.english_name,
+                                    Lang::Japanese => &bone.name,
+                                },
+                            }
+                        };
+                        ui.vertical(|ui| {
+                            ui.label(fetch_bone_name(weight_parameters.bone_indices[0]));
+                            ui.label(fetch_bone_name(weight_parameters.bone_indices[1]));
+                            ui.label(fetch_bone_name(weight_parameters.bone_indices[2]));
+                            ui.label(fetch_bone_name(weight_parameters.bone_indices[3]));
+                        })
                     });
                 })
             });
@@ -413,18 +510,19 @@ enum WeightKind {
     BDEF1,
     BDEF2,
     BDEF4,
-    SDEF,
-    QDEF,
+    Sdef,
+    Qdef,
 }
-impl ToString for WeightKind{
+impl ToString for WeightKind {
     fn to_string(&self) -> String {
         match self {
-            WeightKind::BDEF1 => {"BDEF1"}
-            WeightKind::BDEF2 => {"BDEF2"}
-            WeightKind::BDEF4 => {"BDEF4"}
-            WeightKind::SDEF => {"SDEF"}
-            WeightKind::QDEF => {"QDEF"}
-        }.to_string()
+            WeightKind::BDEF1 => "BDEF1",
+            WeightKind::BDEF2 => "BDEF2",
+            WeightKind::BDEF4 => "BDEF4",
+            WeightKind::Sdef => "SDEF",
+            WeightKind::Qdef => "QDEF",
+        }
+        .to_string()
     }
 }
 impl From<PMXVertexWeight> for WeightKind {
@@ -433,8 +531,8 @@ impl From<PMXVertexWeight> for WeightKind {
             PMXVertexWeight::BDEF1(_) => WeightKind::BDEF1,
             PMXVertexWeight::BDEF2 { .. } => WeightKind::BDEF2,
             PMXVertexWeight::BDEF4 { .. } => WeightKind::BDEF4,
-            PMXVertexWeight::SDEF { .. } => WeightKind::SDEF,
-            PMXVertexWeight::QDEF { .. } => WeightKind::QDEF,
+            PMXVertexWeight::SDEF { .. } => WeightKind::Sdef,
+            PMXVertexWeight::QDEF { .. } => WeightKind::Qdef,
         }
     }
 }

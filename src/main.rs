@@ -5,7 +5,7 @@ mod ui;
 use std::iter;
 
 use crate::global_model_state::BoneTree;
-use crate::ui::{EguiBoneView, Lang, PMXInfoView, TabKind, Tabs, PMXVertexView};
+use crate::ui::{EguiBoneView, Lang, PMXInfoView, PMXVertexView, TabKind, Tabs};
 
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
 use egui_wgpu_backend::{epi, wgpu, RenderPass, ScreenDescriptor};
@@ -24,7 +24,7 @@ fn main() {
     println!("{:?}", env);
     let pmx = PMXUtil::pmx_loader::PMXLoader::open(env);
     let (model_info, loader) = pmx.read_pmx_model_info();
-    let (vertices,loader) =loader.read_pmx_vertices();
+    let (vertices, loader) = loader.read_pmx_vertices();
     let (bones, loader) = loader
         .read_pmx_faces()
         .1
@@ -33,13 +33,8 @@ fn main() {
         .read_pmx_materials()
         .1
         .read_pmx_bones();
-    let mut pmx_info_view = PMXInfoView {
-        header: loader.get_header(),
-        model_info,
-        encode: loader.get_header().encode.into(),
-        lang: Lang::Japanese,
-    };
-    let mut pmx_vertex_view = PMXVertexView::new(vertices);
+    let mut pmx_info_view = PMXInfoView::new(loader.get_header(), model_info);
+    let mut pmx_vertex_view = PMXVertexView::new(vertices, loader.get_header(), &bones);
     let bone_tree = BoneTree::from_iter(bones.iter());
     let mut bone_view = EguiBoneView {
         bones: bones.clone(),
@@ -133,7 +128,7 @@ fn main() {
                 TabKind::Info => {
                     pmx_info_view.display(ui);
                 }
-                TabKind::Vertex=>{
+                TabKind::Vertex => {
                     pmx_vertex_view.display(ui);
                 }
                 TabKind::Bone => {
@@ -145,6 +140,10 @@ fn main() {
                 TabKind::Shader => {}
                 _ => {}
             });
+
+            if let Some(header) = pmx_info_view.query_updated_header() {
+                pmx_vertex_view.update_header(header)
+            }
 
             let (_output, shapes) = egui_ctx.end_frame();
 
