@@ -4,7 +4,7 @@ mod ui;
 
 use std::iter;
 
-use crate::global_model_state::BoneTree;
+
 use crate::ui::{EguiBoneView, PMXInfoView, PMXVertexView, TabKind, Tabs};
 
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;

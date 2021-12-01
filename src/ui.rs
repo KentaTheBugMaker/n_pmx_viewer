@@ -583,9 +583,9 @@ impl From<PMXVertexWeight> for WeightParameters {
                 bone_index_1,
                 bone_index_2,
                 bone_weight_1,
-                sdef_c,
-                sdef_r0,
-                sdef_r1,
+                sdef_c: _,
+                sdef_r0: _,
+                sdef_r1: _,
             } => Self {
                 weights: [bone_weight_1, 1.0 - bone_weight_1, 0.0, 0.0],
                 bone_indices: [bone_index_1, bone_index_2, -1, -1],
