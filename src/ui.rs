@@ -28,7 +28,14 @@ impl Tabs {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.0, TabKind::Info, "Info");
                 ui.selectable_value(&mut self.0, TabKind::Vertex, "Vertex");
+                ui.selectable_value(&mut self.0, TabKind::Face, "Face");
+                ui.selectable_value(&mut self.0, TabKind::Material, "Material");
                 ui.selectable_value(&mut self.0, TabKind::Bone, "Bone");
+                ui.selectable_value(&mut self.0, TabKind::Morph, "Morph");
+                ui.selectable_value(&mut self.0, TabKind::Frame, "Frame");
+                ui.selectable_value(&mut self.0, TabKind::RigidBody, "RigidBody");
+                ui.selectable_value(&mut self.0, TabKind::Joint, "Joint");
+                ui.selectable_value(&mut self.0, TabKind::SoftBody, "SoftBody");
                 ui.selectable_value(&mut self.0, TabKind::View, "View");
                 ui.selectable_value(&mut self.0, TabKind::TextureView, "uv");
                 ui.selectable_value(&mut self.0, TabKind::Shader, "shader");
@@ -85,6 +92,14 @@ pub struct EguiBoneView {
 }
 
 impl EguiBoneView {
+    pub fn new(bones: &[PMXBone]) -> Self {
+        Self {
+            bones: bones.to_vec(),
+            current_displaying_bone: 0,
+            bone_tree: BoneTree::from_iter(bones.iter()),
+            lang: Lang::Japanese,
+        }
+    }
     pub fn display(&mut self, ui: &mut egui::Ui) {
         //lets create tree view
         egui::containers::SidePanel::left("Bone tree view")
@@ -100,7 +115,7 @@ impl EguiBoneView {
                     )
                 });
             });
-        //lets create bone parameter view
+
         let mut cloned_bone = self
             .bones
             .get(self.current_displaying_bone as usize)
@@ -108,40 +123,35 @@ impl EguiBoneView {
             .clone();
         let mut bone_flags = PMXBoneFlags::from(cloned_bone.boneflag);
         let mut rebuilt_tree = false;
-        let mut update_bone = false;
         egui::containers::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.label("ボーン名");
-                    if match self.lang {
+                    match self.lang {
                         Lang::English => ui.text_edit_singleline(&mut cloned_bone.english_name),
                         Lang::Japanese => ui.text_edit_singleline(&mut cloned_bone.name),
-                    }
-                    .changed()
-                    {
-                        update_bone = true;
-                    }
+                    };
+
                     ui.selectable_value(&mut self.lang, Lang::Japanese, "日");
                     ui.selectable_value(&mut self.lang, Lang::English, "英");
                     ui.label("変形階層");
                     let deform = egui::DragValue::new(&mut cloned_bone.deform_depth);
-                    if ui.add(deform).changed() {
-                        update_bone = true;
-                    }
+                    ui.add(deform);
                     ui.checkbox(&mut bone_flags.deform_after_physics, "物理後");
                 });
                 ui.horizontal(|ui| {
                     ui.label("位置");
+                    ui.add(egui::DragValue::new(&mut cloned_bone.position[0]));
+                    ui.add(egui::DragValue::new(&mut cloned_bone.position[1]));
+                    ui.add(egui::DragValue::new(&mut cloned_bone.position[2]));
                 });
                 ui.horizontal(|ui| {
                     ui.label("親ボーン");
-                    if ui
+
+                    rebuilt_tree = ui
                         .add(egui::DragValue::new(&mut cloned_bone.parent))
-                        .changed()
-                    {
-                        rebuilt_tree = true;
-                    }
-                    let parent_name = if cloned_bone.parent == -1 {
+                        .changed();
+                    let parent_name = if cloned_bone.parent < 0 {
                         "-"
                     } else {
                         let parent = self.bones.get(cloned_bone.parent as usize).unwrap();
@@ -155,12 +165,13 @@ impl EguiBoneView {
             })
         });
         //ボーン情報更新
-        if update_bone {
-            *self
-                .bones
-                .get_mut(self.current_displaying_bone as usize)
-                .unwrap() = cloned_bone;
-        }
+
+        println!("updating bone info");
+        *self
+            .bones
+            .get_mut(self.current_displaying_bone as usize)
+            .unwrap() = cloned_bone;
+
         //親ボーンを変更したのでツリー組み立てなおし
         if rebuilt_tree {
             self.bone_tree = BoneTree::from_iter(self.bones.iter());

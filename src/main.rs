@@ -5,7 +5,7 @@ mod ui;
 use std::iter;
 
 use crate::global_model_state::BoneTree;
-use crate::ui::{EguiBoneView, Lang, PMXInfoView, PMXVertexView, TabKind, Tabs};
+use crate::ui::{EguiBoneView, PMXInfoView, PMXVertexView, TabKind, Tabs};
 
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
 use egui_wgpu_backend::{epi, wgpu, RenderPass, ScreenDescriptor};
@@ -35,13 +35,7 @@ fn main() {
         .read_pmx_bones();
     let mut pmx_info_view = PMXInfoView::new(loader.get_header(), model_info);
     let mut pmx_vertex_view = PMXVertexView::new(vertices, loader.get_header(), &bones);
-    let bone_tree = BoneTree::from_iter(bones.iter());
-    let mut bone_view = EguiBoneView {
-        bones: bones.clone(),
-        current_displaying_bone: 0,
-        bone_tree,
-        lang: Lang::Japanese,
-    };
+    let mut bone_view = EguiBoneView::new(&bones);
 
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
@@ -124,6 +118,7 @@ fn main() {
             egui_ctx.begin_frame(input);
 
             tabs.display_tabs(&egui_ctx);
+
             egui::CentralPanel::default().show(&egui_ctx, |ui| match tabs.0 {
                 TabKind::Info => {
                     pmx_info_view.display(ui);
