@@ -275,13 +275,13 @@ impl PMXInfoView {
                         ui.label("additional uvs");
                         let saved_addtional_uvs = self.header.additional_uv;
                         egui::ComboBox::from_label("uvs")
-                            .selected_text(self.header.additional_uv)
+                            .selected_text(self.header.additional_uv.to_string())
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.header.additional_uv, 0, 0);
-                                ui.selectable_value(&mut self.header.additional_uv, 1, 1);
-                                ui.selectable_value(&mut self.header.additional_uv, 2, 2);
-                                ui.selectable_value(&mut self.header.additional_uv, 3, 3);
-                                ui.selectable_value(&mut self.header.additional_uv, 4, 4);
+                                ui.selectable_value(&mut self.header.additional_uv, 0, "0");
+                                ui.selectable_value(&mut self.header.additional_uv, 1, "1");
+                                ui.selectable_value(&mut self.header.additional_uv, 2, "2");
+                                ui.selectable_value(&mut self.header.additional_uv, 3, "3");
+                                ui.selectable_value(&mut self.header.additional_uv, 4, "4");
                             });
                         if saved_addtional_uvs != self.header.additional_uv {
                             self.additonal_uvs_changed = true;
@@ -388,7 +388,7 @@ impl PMXVertexView {
             });
         });
         let mut cloned_vertex = self.vertices[self.selected].clone();
-        let mut weight_kind = cloned_vertex.weight_type.into();
+        let mut weight_kind: WeightKind = cloned_vertex.weight_type.into();
         let mut weight_parameters: WeightParameters = cloned_vertex.weight_type.into();
         egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical(|ui| {
@@ -462,7 +462,7 @@ impl PMXVertexView {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             egui::ComboBox::from_label("変形方式")
-                                .selected_text(weight_kind)
+                                .selected_text(weight_kind.to_string())
                                 .show_ui(ui, |ui| {
                                     ui.selectable_value(
                                         &mut weight_kind,

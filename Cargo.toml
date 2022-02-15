@@ -7,8 +7,9 @@ description ="A new pmx viewer with customizable shaders"
 resolver ="2"
 
 [dependencies]
-egui = "0.15.0"
-egui_wgpu_backend = "0.14.0"
-egui-winit = {version="0.15.0",features=["epi"]}
+egui = "0.16.0"
+epi = "0.16.0"
+egui_wgpu_backend = "0.16.0"
+egui-winit = {version="0.16.0",features=["epi"]}
 PMXUtil ="0.6.1"
 pollster ="0.2.4"

@@ -1,17 +1,17 @@
 mod convert_to_wgpu_model;
 mod global_model_state;
+mod model_selector;
 mod ui;
 
 use std::iter;
 
-
 use crate::ui::{EguiBoneView, PMXInfoView, PMXVertexView, TabKind, Tabs};
 
 use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
-use egui_wgpu_backend::{epi, wgpu, RenderPass, ScreenDescriptor};
+use egui_wgpu_backend::{wgpu, RenderPass, ScreenDescriptor};
 use egui_winit::winit;
-use epi::*;
-use std::borrow::Cow;
+
+use egui::FontData;
 use std::process::exit;
 
 const INITIAL_WIDTH: u32 = 1280;
@@ -90,9 +90,10 @@ fn main() {
     egui_ctx.begin_frame(egui::RawInput::default());
     let mut fonts = egui_ctx.fonts().definitions().clone();
     //install noto sans jp regular
-    fonts
-        .font_data
-        .insert("NotoSansCJK".to_string(), Cow::from(NOTO_SANS_JP_REGULAR));
+    fonts.font_data.insert(
+        "NotoSansCJK".to_string(),
+        FontData::from_static(NOTO_SANS_JP_REGULAR),
+    );
     fonts
         .fonts_for_family
         .values_mut()
@@ -143,7 +144,7 @@ fn main() {
             let (_output, shapes) = egui_ctx.end_frame();
 
             let meshes = egui_ctx.tessellate(shapes);
-            egui_rpass.update_texture(&device, &queue, &egui_ctx.texture());
+            egui_rpass.update_texture(&device, &queue, &egui_ctx.font_image());
             egui_rpass.update_user_textures(&device, &queue);
             let screen_descriptor = ScreenDescriptor {
                 physical_width: surface_config.width,
@@ -182,9 +183,6 @@ fn main() {
                     surface.configure(&device, &surface_config);
                 }
                 integration.on_event(&egui_ctx, &event);
-                if integration.is_quit_event(&event) {
-                    *control_flow = winit::event_loop::ControlFlow::Exit;
-                }
 
                 window.request_redraw(); // TODO: ask egui if the events warrants a repaint instead
             }
