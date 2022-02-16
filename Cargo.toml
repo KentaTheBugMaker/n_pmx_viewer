@@ -7,9 +7,11 @@ description ="A new pmx viewer with customizable shaders"
 resolver ="2"
 
 [dependencies]
+bytemuck={version="1",features=["derive"]}
 egui = "0.16.0"
 epi = "0.16.0"
 egui_wgpu_backend = "0.16.0"
 egui-winit = {version="0.16.0",features=["epi"]}
+image = "0.24"
 PMXUtil ="0.8.2"
 pollster ="0.2.4"

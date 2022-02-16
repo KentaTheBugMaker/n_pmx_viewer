@@ -1,9 +1,7 @@
 use crate::global_model_state::BoneTree;
 use egui::containers::panel::TopBottomSide;
 
-use PMXUtil::pmx_types::{
-    PMXBone, PMXHeaderRust, PMXModelInfo, PMXVertex, PMXVertexWeight,
-};
+use PMXUtil::pmx_types::{PMXBone, PMXHeaderRust, PMXModelInfo, PMXVertex, PMXVertexWeight};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TabKind {

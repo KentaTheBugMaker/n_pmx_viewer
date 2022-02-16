@@ -1,8 +1,7 @@
-mod convert_to_wgpu_model;
 mod global_model_state;
 mod model_selector;
-mod ui;
 mod pmx_renderer;
+mod ui;
 
 use std::iter;
 
@@ -12,13 +11,16 @@ use egui_wgpu_backend::wgpu::CommandEncoderDescriptor;
 use egui_wgpu_backend::{wgpu, RenderPass, ScreenDescriptor};
 use egui_winit::winit;
 
+use crate::model_selector::ModelSelector;
 use egui::FontData;
 use std::process::exit;
+use std::sync::Arc;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
 static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
+
 /// A simple egui + wgpu + winit based example.
 fn main() {
     let env = std::env::var("PMX_PATH").unwrap();
@@ -83,6 +85,7 @@ fn main() {
     };
     surface.configure(&device, &surface_config);
     let mut tabs = Tabs(TabKind::Info);
+    let mut models = Arc::new(model_selector::Models::dummy());
     // We use the egui_wgpu_backend crate as the render backend.
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
     let mut integration = egui_winit::State::new(&window);
@@ -101,7 +104,7 @@ fn main() {
         .for_each(|x| x.push("NotoSansCJK".to_string()));
     egui_ctx.set_fonts(fonts);
     egui_ctx.end_frame();
-
+    let mut model_number = 0;
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
             let input = integration.take_egui_input(&window);
@@ -137,7 +140,12 @@ fn main() {
                 TabKind::Shader => {}
                 _ => {}
             });
-
+            egui::TopBottomPanel::bottom("model_selector").show(&egui_ctx, |ui| {
+                ui.add(ModelSelector::create_view(
+                    &models,
+                    &mut model_number,
+                ))
+            });
             if let Some(header) = pmx_info_view.query_updated_header() {
                 pmx_vertex_view.update_header(header)
             }
