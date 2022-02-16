@@ -1,4 +1,4 @@
-use PMXUtil::pmx_types::pmx_types::PMXVertex;
+use PMXUtil::pmx_types::PMXVertex;
 struct WGPUVertex {
     position: [f32; 3],
     normal: [f32; 3],

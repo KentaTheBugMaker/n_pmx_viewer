@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
-use PMXUtil::pmx_types::pmx_types::{PMXBone, PMXModelInfo};
+use PMXUtil::pmx_types::{PMXBone, PMXModelInfo};
 
 ///モデルの回転,平行移動,倍率を表す
 ///

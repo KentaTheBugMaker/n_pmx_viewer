@@ -11,5 +11,5 @@ egui = "0.16.0"
 epi = "0.16.0"
 egui_wgpu_backend = "0.16.0"
 egui-winit = {version="0.16.0",features=["epi"]}
-PMXUtil ="0.6.1"
+PMXUtil ="0.8.2"
 pollster ="0.2.4"

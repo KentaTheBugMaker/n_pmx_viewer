@@ -2,6 +2,7 @@ mod convert_to_wgpu_model;
 mod global_model_state;
 mod model_selector;
 mod ui;
+mod pmx_renderer;
 
 use std::iter;
 

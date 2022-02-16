@@ -1,7 +1,7 @@
 use crate::global_model_state::BoneTree;
 use egui::containers::panel::TopBottomSide;
 
-use PMXUtil::pmx_types::pmx_types::{
+use PMXUtil::pmx_types::{
     PMXBone, PMXHeaderRust, PMXModelInfo, PMXVertex, PMXVertexWeight,
 };
 
@@ -201,23 +201,23 @@ impl PMXBoneFlags {
 impl From<u16> for PMXBoneFlags {
     fn from(raw_bone_flag: u16) -> Self {
         let mut bone_flag = Self::none();
-        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
-            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
+        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
+            == PMXUtil::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
         {
             bone_flag.deform_after_physics = true;
         }
-        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
-            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
+        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
+            == PMXUtil::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
         {
             bone_flag.is_target_is_other_bone = true;
         }
-        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
-            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
+        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
+            == PMXUtil::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
         {
             bone_flag.allow_rotate = true;
         }
-        if raw_bone_flag & PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
-            == PMXUtil::pmx_types::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
+        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
+            == PMXUtil::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
         {
             bone_flag.allow_translate = true;
         }
@@ -326,11 +326,11 @@ pub(crate) enum Encode {
     UTF16LE,
     UTF8,
 }
-impl From<PMXUtil::pmx_types::pmx_types::Encode> for Encode {
-    fn from(encode: PMXUtil::pmx_types::pmx_types::Encode) -> Self {
+impl From<PMXUtil::pmx_types::Encode> for Encode {
+    fn from(encode: PMXUtil::pmx_types::Encode) -> Self {
         match encode {
-            PMXUtil::pmx_types::pmx_types::Encode::UTF8 => Self::UTF8,
-            PMXUtil::pmx_types::pmx_types::Encode::Utf16Le => Self::UTF16LE,
+            PMXUtil::pmx_types::Encode::UTF8 => Self::UTF8,
+            PMXUtil::pmx_types::Encode::Utf16Le => Self::UTF16LE,
         }
     }
 }
