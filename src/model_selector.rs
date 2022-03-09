@@ -44,39 +44,43 @@ impl<'a> ModelSelector<'a> {
 impl<'a> Widget for ModelSelector<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
         ui.horizontal(|ui| {
-            self.models
-                .model
-                .iter()
-                .enumerate()
-                .for_each(|(model_number, model)| {
-                    let mut button = egui::Button::new(&model.name);
-                    if *self.current_model == model_number {
-                        button = button.fill(Color32::LIGHT_BLUE);
-                    }
-                    let response = ui.add(button);
-                    if response.clicked() {
-                        *self.current_model = model_number;
-                    }
-                    //create small view to display thumbnail
-
-                    if response.hovered() {
-                        let mut center = response.rect.center_top();
-
-                        center.y -= 190.0;
-                        center.x -= 176.0;
-                        if center.x < 0.0 {
-                            center.x = 10.0
+            if self.models.model.is_empty() {
+                ui.label("No models");
+            } else {
+                self.models
+                    .model
+                    .iter()
+                    .enumerate()
+                    .for_each(|(model_number, model)| {
+                        let mut button = egui::Button::new(&model.name);
+                        if *self.current_model == model_number {
+                            button = button.fill(Color32::LIGHT_BLUE);
                         }
-                        egui::Window::new(&model.name)
-                            .fixed_pos(center)
-                            .title_bar(false)
-                            .resizable(false)
-                            .collapsible(false)
-                            .show(ui.ctx(), |ui| {
-                                ui.image(model.thumbnail, Vec2::new(352.0, 176.0));
-                            });
-                    }
-                })
+                        let response = ui.add(button);
+                        if response.clicked() {
+                            *self.current_model = model_number;
+                        }
+                        //create small view to display thumbnail
+
+                        if response.hovered() {
+                            let mut center = response.rect.center_top();
+
+                            center.y -= 190.0;
+                            center.x -= 176.0;
+                            if center.x < 0.0 {
+                                center.x = 10.0
+                            }
+                            egui::Window::new(&model.name)
+                                .fixed_pos(center)
+                                .title_bar(false)
+                                .resizable(false)
+                                .collapsible(false)
+                                .show(ui.ctx(), |ui| {
+                                    ui.image(model.thumbnail, Vec2::new(352.0, 176.0));
+                                });
+                        }
+                    })
+            }
         })
         .response
     }

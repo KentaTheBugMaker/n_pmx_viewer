@@ -162,8 +162,6 @@ impl EguiBoneView {
             })
         });
         //ボーン情報更新
-
-        println!("updating bone info");
         *self
             .bones
             .get_mut(self.current_displaying_bone as usize)

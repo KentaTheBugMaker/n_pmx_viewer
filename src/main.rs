@@ -17,23 +17,36 @@ use egui_winit::winit::event::WindowEvent;
 use egui_winit::winit::event_loop::ControlFlow;
 use std::io::Read;
 use std::process::exit;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
+use PMXUtil::reader::ModelInfoStage;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
-/// A simple egui + wgpu + winit based example.
-fn main() {
-    let env = std::env::var("PMX_PATH").unwrap();
-    println!("{:?}", env);
-    let pmx = PMXUtil::reader::ModelInfoStage::open(env).unwrap();
+fn create_new_model_tab<R: Read>(
+    pmx: ModelInfoStage<R>,
+) -> (String, (PMXInfoView, PMXVertexView, EguiBoneView, Tabs)) {
     let header = pmx.get_header();
     let (model_info, loader) = pmx.read();
     let (vertices, loader) = loader.read();
     let (bones, loader) = loader.read().1.read().1.read().1.read();
-    let mut pmx_info_view = PMXInfoView::new(header.clone(), model_info);
-    let mut pmx_vertex_view = PMXVertexView::new(vertices, header, &bones);
-    let mut bone_view = EguiBoneView::new(&bones);
+    let pmx_info_view = PMXInfoView::new(header.clone(), model_info.clone());
+    let pmx_vertex_view = PMXVertexView::new(vertices, header, &bones);
+    let bone_view = EguiBoneView::new(&bones);
+    (
+        model_info.name,
+        (
+            pmx_info_view,
+            pmx_vertex_view,
+            bone_view,
+            Tabs(TabKind::Info),
+        ),
+    )
+}
+
+/// A simple egui + wgpu + winit based example.
+fn main() {
+    let mut model_data_views: Vec<(PMXInfoView, PMXVertexView, EguiBoneView, Tabs)> = Vec::new();
 
     let event_loop = winit::event_loop::EventLoop::new();
     let window = winit::window::WindowBuilder::new()
@@ -79,8 +92,7 @@ fn main() {
         present_mode: wgpu::PresentMode::Fifo,
     };
     surface.configure(&device, &surface_config);
-    let mut tabs = Tabs(TabKind::Info);
-    let mut models = Arc::new(RwLock::new(model_selector::Models::dummy()));
+    let models = Arc::new(RwLock::new(model_selector::Models::new()));
     // We use the egui_wgpu_backend crate as the render backend.
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
     let mut integration =
@@ -124,34 +136,35 @@ fn main() {
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             egui_ctx.begin_frame(input);
+            if let Some(model_data_view) = model_data_views.get_mut(model_number) {
+                model_data_view.3.display_tabs(&egui_ctx);
 
-            tabs.display_tabs(&egui_ctx);
+                egui::CentralPanel::default().show(&egui_ctx, |ui| match model_data_view.3 .0 {
+                    TabKind::Info => {
+                        model_data_view.0.display(ui);
+                    }
+                    TabKind::Vertex => {
+                        model_data_view.1.display(ui);
+                    }
+                    TabKind::Bone => {
+                        model_data_view.2.display(ui);
+                    }
 
-            egui::CentralPanel::default().show(&egui_ctx, |ui| match tabs.0 {
-                TabKind::Info => {
-                    pmx_info_view.display(ui);
+                    TabKind::View => {}
+                    TabKind::TextureView => {}
+                    TabKind::Shader => {}
+                    _ => {}
+                });
+                if let Some(header) = model_data_view.0.query_updated_header() {
+                    model_data_view.1.update_header(header)
                 }
-                TabKind::Vertex => {
-                    pmx_vertex_view.display(ui);
-                }
-                TabKind::Bone => {
-                    bone_view.display(ui);
-                }
-
-                TabKind::View => {}
-                TabKind::TextureView => {}
-                TabKind::Shader => {}
-                _ => {}
-            });
+            }
             egui::TopBottomPanel::bottom("model_selector").show(&egui_ctx, |ui| {
                 ui.add(ModelSelector::create_view(
                     &models.read().unwrap(),
                     &mut model_number,
                 ))
             });
-            if let Some(header) = pmx_info_view.query_updated_header() {
-                pmx_vertex_view.update_header(header)
-            }
 
             let full_output = egui_ctx.end_frame();
             let FullOutput {
@@ -160,7 +173,9 @@ fn main() {
                 textures_delta,
                 shapes,
             } = full_output;
-            egui_rpass.add_textures(&device, &queue, &textures_delta);
+            egui_rpass
+                .add_textures(&device, &queue, &textures_delta)
+                .ok();
 
             let meshes = egui_ctx.tessellate(shapes);
             let screen_descriptor = ScreenDescriptor {
@@ -173,14 +188,16 @@ fn main() {
                 label: Some("egui_renderpass"),
             });
 
-            egui_rpass.execute(
-                &mut encoder,
-                &output_view,
-                &meshes,
-                &screen_descriptor,
-                Some(wgpu::Color::BLACK),
-            );
-            egui_rpass.remove_textures(textures_delta);
+            egui_rpass
+                .execute(
+                    &mut encoder,
+                    &output_view,
+                    &meshes,
+                    &screen_descriptor,
+                    Some(wgpu::Color::BLACK),
+                )
+                .ok();
+            egui_rpass.remove_textures(textures_delta).ok();
             let command = encoder.finish();
             queue.submit(iter::once(command));
             output_frame.present();
@@ -227,11 +244,12 @@ fn main() {
                                                     pmx_file,
                                                 )
                                             {
-                                                let (mi, reader) = reader.read();
-
+                                                let (name, data) = create_new_model_tab(reader);
                                                 models
                                                     .write()
-                                                    .map(|mut lock| lock.new_model(&mi.name));
+                                                    .map(|mut models| models.new_model(&name))
+                                                    .ok();
+                                                model_data_views.push(data);
                                             }
                                         }
                                     }
