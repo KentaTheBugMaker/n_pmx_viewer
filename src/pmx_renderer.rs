@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::ops::Range;
-use PMXUtil::pmx_loader::VerticesLoader;
-use PMXUtil::pmx_types::PMXVertex;
+use PMXUtil::reader::VerticesStage;
 
 use bytemuck::{Pod, Zeroable};
 use egui_wgpu_backend::wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -21,23 +20,22 @@ pub struct RenderResource {
 }
 
 impl RenderResource {
-    fn from_loader(
-        loader: VerticesLoader,
+    fn from_loader<R: std::io::Read>(
+        loader: VerticesStage<R>,
         device: &egui_wgpu_backend::wgpu::Device,
         queue: &egui_wgpu_backend::wgpu::Queue,
         pmx_base_path: &Path,
     ) -> Self {
-        let (mut vertices, loader) = loader.read_pmx_vertices();
+        let (mut vertices, loader) = loader.read();
         let vertices: Vec<Vertex> = vertices.drain(..).map(|v| v.into()).collect();
-        let (mut faces, loader) = loader.read_pmx_faces();
+        let (mut faces, loader) = loader.read();
         let indices: Vec<u32> = faces.drain(..).fold(vec![], |mut buffer, face| {
             buffer.extend(face.vertices.iter().map(|i| *i as u32));
             buffer
         });
-        let (texture_paths, loader) = loader.read_texture_list();
+        let (texture_paths, loader) = loader.read();
         let textures = if let Some(base_path) = pmx_base_path.parent() {
             texture_paths
-                .textures
                 .iter()
                 .filter_map(|tex_path| {
                     let path = base_path.join(tex_path);
@@ -68,9 +66,9 @@ impl RenderResource {
         } else {
             vec![]
         };
-        let (materials, _) = loader.read_pmx_materials();
+        let (materials, _) = loader.read();
         let mut from = 0;
-        let materials:Vec<_> = materials
+        let materials: Vec<_> = materials
             .iter()
             .map(|material| {
                 let mat = Material {
@@ -109,8 +107,8 @@ struct Vertex {
     uv: [f32; 2],
     norm: [f32; 3],
 }
-impl From<PMXUtil::pmx_types::PMXVertex> for Vertex {
-    fn from(vertex: PMXVertex) -> Self {
+impl From<PMXUtil::types::Vertex> for Vertex {
+    fn from(vertex: PMXUtil::types::Vertex) -> Self {
         Self {
             pos: [
                 vertex.position[0],

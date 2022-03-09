@@ -1,7 +1,7 @@
 use crate::global_model_state::BoneTree;
 use egui::containers::panel::TopBottomSide;
 
-use PMXUtil::pmx_types::{PMXBone, PMXHeaderRust, PMXModelInfo, PMXVertex, PMXVertexWeight};
+use PMXUtil::types::{Bone, BoneFlags, Header, ModelInfo, Vertex, VertexWeight};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TabKind {
@@ -49,7 +49,7 @@ fn display_in_collapsing_header(
     tree: &BoneTree,
     ui: &mut egui::Ui,
     select: &mut i32,
-    data_source: &[PMXBone],
+    data_source: &[Bone],
     indent_level: usize,
 ) {
     let name = if tree.id == -1 {
@@ -83,14 +83,14 @@ pub enum Lang {
 }
 
 pub struct EguiBoneView {
-    pub(crate) bones: Vec<PMXBone>,
+    pub(crate) bones: Vec<Bone>,
     pub(crate) current_displaying_bone: i32,
     pub(crate) bone_tree: BoneTree,
     pub(crate) lang: Lang,
 }
 
 impl EguiBoneView {
-    pub fn new(bones: &[PMXBone]) -> Self {
+    pub fn new(bones: &[Bone]) -> Self {
         Self {
             bones: bones.to_vec(),
             current_displaying_bone: 0,
@@ -119,7 +119,6 @@ impl EguiBoneView {
             .get(self.current_displaying_bone as usize)
             .unwrap()
             .clone();
-        let mut bone_flags = PMXBoneFlags::from(cloned_bone.boneflag);
         let mut rebuilt_tree = false;
         egui::containers::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical(|ui| {
@@ -135,7 +134,7 @@ impl EguiBoneView {
                     ui.label("変形階層");
                     let deform = egui::DragValue::new(&mut cloned_bone.deform_depth);
                     ui.add(deform);
-                    ui.checkbox(&mut bone_flags.deform_after_physics, "物理後");
+                    ui.checkbox(&mut cloned_bone.physics_after_deform, "物理後");
                 });
                 ui.horizontal(|ui| {
                     ui.label("位置");
@@ -196,31 +195,15 @@ impl PMXBoneFlags {
         }
     }
 }
-impl From<u16> for PMXBoneFlags {
-    fn from(raw_bone_flag: u16) -> Self {
-        let mut bone_flag = Self::none();
-        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
-            == PMXUtil::pmx_types::BONE_FLAG_DEFORM_AFTER_PHYSICS_MASK
-        {
-            bone_flag.deform_after_physics = true;
+impl From<BoneFlags> for PMXBoneFlags {
+    fn from(flags: BoneFlags) -> Self {
+        Self {
+            is_target_is_other_bone: flags.contains(BoneFlags::CONNECT_TO_OTHER_BONE),
+            deform_after_physics: flags.contains(BoneFlags::PHYSICS_AFTER_DEFORM),
+            allow_rotate: flags.contains(BoneFlags::ROTATABLE),
+            allow_translate: flags.contains(BoneFlags::TRANSLATABLE),
+            flag1: false,
         }
-        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
-            == PMXUtil::pmx_types::BONE_FLAG_TARGET_SHOW_MODE_MASK
-        {
-            bone_flag.is_target_is_other_bone = true;
-        }
-        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
-            == PMXUtil::pmx_types::BONE_FLAG_ALLOW_ROTATE_MASK
-        {
-            bone_flag.allow_rotate = true;
-        }
-        if raw_bone_flag & PMXUtil::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
-            == PMXUtil::pmx_types::BONE_FLAG_ALLOW_TRANSLATE_MASK
-        {
-            bone_flag.allow_translate = true;
-        }
-
-        bone_flag
     }
 }
 
@@ -231,14 +214,14 @@ impl From<PMXBoneFlags> for u16 {
 }
 
 pub struct PMXInfoView {
-    pub(crate) header: PMXHeaderRust,
-    pub(crate) model_info: PMXModelInfo,
+    pub(crate) header: Header,
+    pub(crate) model_info: ModelInfo,
     pub(crate) encode: Encode,
     pub(crate) lang: Lang,
     additonal_uvs_changed: bool,
 }
 impl PMXInfoView {
-    pub fn new(header: PMXHeaderRust, model_info: PMXModelInfo) -> Self {
+    pub fn new(header: Header, model_info: ModelInfo) -> Self {
         let encode = header.encode.into();
         Self {
             header,
@@ -254,7 +237,7 @@ impl PMXInfoView {
                 ui.label("System");
                 egui::Frame::none().show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(format!("PMX Version : {}", self.header.version));
+                        ui.label(format!("PMX Version : {:?}", self.header.version));
                         ui.label("character encoding :");
                         egui::ComboBox::from_label("")
                             .selected_text(self.encode.to_string())
@@ -310,7 +293,7 @@ impl PMXInfoView {
             });
         });
     }
-    pub fn query_updated_header(&mut self) -> Option<PMXHeaderRust> {
+    pub fn query_updated_header(&mut self) -> Option<Header> {
         if self.additonal_uvs_changed {
             self.additonal_uvs_changed = false;
             Some(self.header.clone())
@@ -324,11 +307,11 @@ pub(crate) enum Encode {
     UTF16LE,
     UTF8,
 }
-impl From<PMXUtil::pmx_types::Encode> for Encode {
-    fn from(encode: PMXUtil::pmx_types::Encode) -> Self {
+impl From<PMXUtil::types::Encode> for Encode {
+    fn from(encode: PMXUtil::types::Encode) -> Self {
         match encode {
-            PMXUtil::pmx_types::Encode::UTF8 => Self::UTF8,
-            PMXUtil::pmx_types::Encode::Utf16Le => Self::UTF16LE,
+            PMXUtil::types::Encode::UTF8 => Self::UTF8,
+            PMXUtil::types::Encode::Utf16Le => Self::UTF16LE,
         }
     }
 }
@@ -341,17 +324,17 @@ impl ToString for Encode {
     }
 }
 pub struct PMXVertexView {
-    vertices: Vec<PMXVertex>,
+    vertices: Vec<Vertex>,
     selected: usize,
     display_sdef_parameter: bool,
     update_vertices: bool,
-    header: PMXHeaderRust,
-    bones: Vec<PMXBone>,
+    header: Header,
+    bones: Vec<Bone>,
     selected_uv: u8,
     lang: Lang,
 }
 impl PMXVertexView {
-    pub fn new(vertices: Vec<PMXVertex>, header: PMXHeaderRust, bones: &[PMXBone]) -> Self {
+    pub fn new(vertices: Vec<Vertex>, header: Header, bones: &[Bone]) -> Self {
         Self {
             vertices,
             selected: 0,
@@ -363,10 +346,10 @@ impl PMXVertexView {
             lang: Lang::Japanese,
         }
     }
-    pub fn update_header(&mut self, header: PMXHeaderRust) {
+    pub fn update_header(&mut self, header: Header) {
         self.header = header;
     }
-    pub fn update_bone(&mut self, bones: &[PMXBone]) {
+    pub fn update_bone(&mut self, bones: &[Bone]) {
         self.bones = bones.to_vec();
     }
     pub fn display(&mut self, ui: &mut egui::Ui) {
@@ -534,14 +517,14 @@ impl ToString for WeightKind {
         .to_string()
     }
 }
-impl From<PMXVertexWeight> for WeightKind {
-    fn from(weight: PMXVertexWeight) -> Self {
+impl From<VertexWeight> for WeightKind {
+    fn from(weight: VertexWeight) -> Self {
         match weight {
-            PMXVertexWeight::BDEF1(_) => WeightKind::BDEF1,
-            PMXVertexWeight::BDEF2 { .. } => WeightKind::BDEF2,
-            PMXVertexWeight::BDEF4 { .. } => WeightKind::BDEF4,
-            PMXVertexWeight::SDEF { .. } => WeightKind::Sdef,
-            PMXVertexWeight::QDEF { .. } => WeightKind::Qdef,
+            VertexWeight::BDEF1(_) => WeightKind::BDEF1,
+            VertexWeight::BDEF2 { .. } => WeightKind::BDEF2,
+            VertexWeight::BDEF4 { .. } => WeightKind::BDEF4,
+            VertexWeight::SDEF { .. } => WeightKind::Sdef,
+            VertexWeight::QDEF { .. } => WeightKind::Qdef,
         }
     }
 }
@@ -549,14 +532,14 @@ struct WeightParameters {
     weights: [f32; 4],
     bone_indices: [i32; 4],
 }
-impl From<PMXVertexWeight> for WeightParameters {
-    fn from(weight: PMXVertexWeight) -> Self {
+impl From<VertexWeight> for WeightParameters {
+    fn from(weight: VertexWeight) -> Self {
         match weight {
-            PMXVertexWeight::BDEF1(x) => Self {
+            VertexWeight::BDEF1(x) => Self {
                 weights: [1.0, 0.0, 0.0, 0.0],
                 bone_indices: [x, -1, -1, -1],
             },
-            PMXVertexWeight::BDEF2 {
+            VertexWeight::BDEF2 {
                 bone_index_1,
                 bone_index_2,
                 bone_weight_1,
@@ -564,7 +547,7 @@ impl From<PMXVertexWeight> for WeightParameters {
                 weights: [bone_weight_1, 1.0 - bone_weight_1, 0.0, 0.0],
                 bone_indices: [bone_index_1, bone_index_2, -1, -1],
             },
-            PMXVertexWeight::BDEF4 {
+            VertexWeight::BDEF4 {
                 bone_index_1,
                 bone_index_2,
                 bone_index_3,
@@ -577,7 +560,7 @@ impl From<PMXVertexWeight> for WeightParameters {
                 weights: [bone_weight_1, bone_weight_2, bone_weight_3, bone_weight_4],
                 bone_indices: [bone_index_1, bone_index_2, bone_index_3, bone_index_4],
             },
-            PMXVertexWeight::SDEF {
+            VertexWeight::SDEF {
                 bone_index_1,
                 bone_index_2,
                 bone_weight_1,
@@ -588,7 +571,7 @@ impl From<PMXVertexWeight> for WeightParameters {
                 weights: [bone_weight_1, 1.0 - bone_weight_1, 0.0, 0.0],
                 bone_indices: [bone_index_1, bone_index_2, -1, -1],
             },
-            PMXVertexWeight::QDEF {
+            VertexWeight::QDEF {
                 bone_index_1,
                 bone_index_2,
                 bone_index_3,

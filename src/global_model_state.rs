@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
-use PMXUtil::pmx_types::{PMXBone, PMXModelInfo};
+use PMXUtil::types::{Bone, ModelInfo};
 
 ///モデルについての情報を表す
 #[derive(Debug)]
@@ -18,7 +18,7 @@ pub struct BoneTree {
 }
 
 impl BoneTree {
-    pub fn from_iter<'a>(iter: impl Iterator<Item = &'a PMXBone> + Clone) -> Self {
+    pub fn from_iter<'a>(iter: impl Iterator<Item = &'a Bone> + Clone) -> Self {
         let root = iter
             .clone()
             .enumerate()
@@ -33,7 +33,7 @@ impl BoneTree {
         }
         root_node
     }
-    pub fn append(&mut self, child_index: i32, bone_info: PMXBone) {
+    pub fn append(&mut self, child_index: i32, bone_info: Bone) {
         if self.id == bone_info.parent {
             //親IDが自分と一致したなら子供に入れる
             println!("{} : inserted", child_index);
@@ -69,7 +69,7 @@ impl BoneTree {
             }
         }
     }
-    pub fn dump_tree(&self, indent_level: usize, data_source: &[PMXBone]) -> String {
+    pub fn dump_tree(&self, indent_level: usize, data_source: &[Bone]) -> String {
         let name = if self.id == -1 {
             "Root"
         } else {
@@ -84,7 +84,7 @@ impl BoneTree {
     }
 }
 impl Model {
-    pub fn new(model_info: PMXModelInfo) -> Self {
+    pub fn new(model_info: ModelInfo) -> Self {
         Self {
             name: model_info.name.clone(),
             bone_tree: None,
@@ -92,7 +92,7 @@ impl Model {
     }
     ///親のインデックスを見ながらツリーを作っていく
     ///
-    pub fn load_bones(&mut self, bones: &[PMXBone]) {
+    pub fn load_bones(&mut self, bones: &[Bone]) {
         let root = bones
             .iter()
             .enumerate()

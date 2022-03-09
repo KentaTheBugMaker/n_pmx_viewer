@@ -13,8 +13,11 @@ use egui_winit::winit;
 
 use crate::model_selector::ModelSelector;
 use egui::FontData;
+use egui_winit::winit::event::WindowEvent;
+use egui_winit::winit::event_loop::ControlFlow;
+use std::io::Read;
 use std::process::exit;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
@@ -25,19 +28,13 @@ static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf")
 fn main() {
     let env = std::env::var("PMX_PATH").unwrap();
     println!("{:?}", env);
-    let pmx = PMXUtil::pmx_loader::PMXLoader::open(env);
-    let (model_info, loader) = pmx.read_pmx_model_info();
-    let (vertices, loader) = loader.read_pmx_vertices();
-    let (bones, loader) = loader
-        .read_pmx_faces()
-        .1
-        .read_texture_list()
-        .1
-        .read_pmx_materials()
-        .1
-        .read_pmx_bones();
-    let mut pmx_info_view = PMXInfoView::new(loader.get_header(), model_info);
-    let mut pmx_vertex_view = PMXVertexView::new(vertices, loader.get_header(), &bones);
+    let pmx = PMXUtil::reader::ModelInfoStage::open(env).unwrap();
+    let header = pmx.get_header();
+    let (model_info, loader) = pmx.read();
+    let (vertices, loader) = loader.read();
+    let (bones, loader) = loader.read().1.read().1.read().1.read();
+    let mut pmx_info_view = PMXInfoView::new(header.clone(), model_info);
+    let mut pmx_vertex_view = PMXVertexView::new(vertices, header, &bones);
     let mut bone_view = EguiBoneView::new(&bones);
 
     let event_loop = winit::event_loop::EventLoop::new();
@@ -85,7 +82,7 @@ fn main() {
     };
     surface.configure(&device, &surface_config);
     let mut tabs = Tabs(TabKind::Info);
-    let mut models = Arc::new(model_selector::Models::dummy());
+    let mut models = Arc::new(RwLock::new(model_selector::Models::dummy()));
     // We use the egui_wgpu_backend crate as the render backend.
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
     let mut integration = egui_winit::State::new(&window);
@@ -141,10 +138,7 @@ fn main() {
                 _ => {}
             });
             egui::TopBottomPanel::bottom("model_selector").show(&egui_ctx, |ui| {
-                ui.add(ModelSelector::create_view(
-                    &models,
-                    &mut model_number,
-                ))
+                ui.add(ModelSelector::create_view(&models.read().unwrap(), &mut model_number))
             });
             if let Some(header) = pmx_info_view.query_updated_header() {
                 pmx_vertex_view.update_header(header)
@@ -184,13 +178,69 @@ fn main() {
             // See: https://github.com/rust-windowing/winit/issues/1619
             winit::event::Event::RedrawEventsCleared if cfg!(windows) => redraw(),
             winit::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
-
             winit::event::Event::WindowEvent { event, .. } => {
-                if let winit::event::WindowEvent::Resized(physical_size) = event {
-                    surface_config.width = physical_size.width;
-                    surface_config.height = physical_size.height;
-                    surface.configure(&device, &surface_config);
+                match event {
+                    WindowEvent::Resized(physical_size) => {
+                        surface_config.width = physical_size.width;
+                        surface_config.height = physical_size.height;
+                        surface.configure(&device, &surface_config);
+                    }
+                    WindowEvent::Moved(_) => {}
+                    WindowEvent::CloseRequested => {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    WindowEvent::Destroyed => {}
+                    WindowEvent::DroppedFile(ref file) => {
+                        if file.extension().and_then(|path| path.to_str()) == Some("zip") {
+                            #[cfg(not(target_arch = "wasm32"))]
+                            let reader = std::fs::File::open(&file).ok();
+                            if let Some(reader) = reader {
+                                let zip_ar = zip::read::ZipArchive::new(reader).ok();
+                                if let Some(mut ar) = zip_ar {
+                                    let mut pmx_path = None;
+                                    for name in ar.file_names() {
+                                        println!("zip_content {}", name);
+                                        if name.contains("pmx"){
+                                            pmx_path=Some(name.to_owned());
+                                        }
+                                    }
+
+                                    if let Some(pmx_path) = pmx_path {
+                                        if let Some(pmx_file) = ar.by_name(&pmx_path).ok() {
+                                            if let Some(reader) =
+                                                PMXUtil::reader::ModelInfoStage::from_reader(
+                                                    pmx_file,
+                                                )
+                                            {
+                                                let (mi,reader)=reader.read();
+
+                                                models.write().map(|mut lock|{lock.new_model(&mi.name)});
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                        }
+                    }
+                    WindowEvent::HoveredFile(_) => {}
+                    WindowEvent::HoveredFileCancelled => {}
+                    WindowEvent::ReceivedCharacter(_) => {}
+                    WindowEvent::Focused(_) => {}
+                    WindowEvent::KeyboardInput { .. } => {}
+                    WindowEvent::ModifiersChanged(_) => {}
+                    WindowEvent::CursorMoved { .. } => {}
+                    WindowEvent::CursorEntered { .. } => {}
+                    WindowEvent::CursorLeft { .. } => {}
+                    WindowEvent::MouseWheel { .. } => {}
+                    WindowEvent::MouseInput { .. } => {}
+                    WindowEvent::TouchpadPressure { .. } => {}
+                    WindowEvent::AxisMotion { .. } => {}
+                    WindowEvent::Touch(_) => {}
+                    WindowEvent::ScaleFactorChanged { .. } => {}
+                    WindowEvent::ThemeChanged(_) => {}
                 }
+
                 integration.on_event(&egui_ctx, &event);
 
                 window.request_redraw(); // TODO: ask egui if the events warrants a repaint instead

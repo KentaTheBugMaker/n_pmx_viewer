@@ -13,5 +13,6 @@ epi = "0.16.0"
 egui_wgpu_backend = "0.16.0"
 egui-winit = {version="0.16.0",features=["epi"]}
 image = "0.24"
-PMXUtil ="0.8.2"
+PMXUtil ="0.9.0"
 pollster ="0.2.4"
+zip = "0.5.13"

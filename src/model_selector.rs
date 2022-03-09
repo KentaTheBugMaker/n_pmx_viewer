@@ -22,6 +22,12 @@ impl Models {
             ],
         }
     }
+    pub fn new_model(&mut self, name: &str) {
+        self.model.push(Model {
+            thumbnail: Default::default(),
+            name: name.to_string(),
+        })
+    }
 }
 pub struct ModelSelector<'a> {
     models: &'a Models,
