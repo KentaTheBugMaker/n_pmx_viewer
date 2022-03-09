@@ -12,7 +12,7 @@ use egui_wgpu_backend::{wgpu, RenderPass, ScreenDescriptor};
 use egui_winit::winit;
 
 use crate::model_selector::ModelSelector;
-use egui::FontData;
+use egui::{FontData, FullOutput};
 use egui_winit::winit::event::WindowEvent;
 use egui_winit::winit::event_loop::ControlFlow;
 use std::io::Read;
@@ -21,8 +21,6 @@ use std::sync::{Arc, Mutex, RwLock};
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
-
-static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
 
 /// A simple egui + wgpu + winit based example.
 fn main() {
@@ -85,22 +83,30 @@ fn main() {
     let mut models = Arc::new(RwLock::new(model_selector::Models::dummy()));
     // We use the egui_wgpu_backend crate as the render backend.
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
-    let mut integration = egui_winit::State::new(&window);
-    let mut egui_ctx = egui::CtxRef::default();
-    //to install japanese font start frame.
-    egui_ctx.begin_frame(egui::RawInput::default());
-    let mut fonts = egui_ctx.fonts().definitions().clone();
-    //install noto sans jp regular
-    fonts.font_data.insert(
-        "NotoSansCJK".to_string(),
-        FontData::from_static(NOTO_SANS_JP_REGULAR),
-    );
-    fonts
-        .fonts_for_family
-        .values_mut()
-        .for_each(|x| x.push("NotoSansCJK".to_string()));
-    egui_ctx.set_fonts(fonts);
-    egui_ctx.end_frame();
+    let mut integration =
+        egui_winit::State::new(device.limits().max_texture_dimension_2d as usize, &window);
+
+    let egui_ctx = egui::Context::default();
+
+    let mut fonts = egui::FontDefinitions::default();
+
+    if let Ok(noto_jp_bytes) = std::fs::read("./resources/NotoSansJP-Regular.otf") {
+        fonts
+            .font_data
+            .insert("JP".to_owned(), FontData::from_owned(noto_jp_bytes));
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .insert(0, "JP".to_owned());
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "JP".to_owned());
+        egui_ctx.set_fonts(fonts);
+    }
+
     let mut model_number = 0;
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
@@ -138,17 +144,25 @@ fn main() {
                 _ => {}
             });
             egui::TopBottomPanel::bottom("model_selector").show(&egui_ctx, |ui| {
-                ui.add(ModelSelector::create_view(&models.read().unwrap(), &mut model_number))
+                ui.add(ModelSelector::create_view(
+                    &models.read().unwrap(),
+                    &mut model_number,
+                ))
             });
             if let Some(header) = pmx_info_view.query_updated_header() {
                 pmx_vertex_view.update_header(header)
             }
 
-            let (_output, shapes) = egui_ctx.end_frame();
+            let full_output = egui_ctx.end_frame();
+            let FullOutput {
+                platform_output,
+                needs_repaint,
+                textures_delta,
+                shapes,
+            } = full_output;
+            egui_rpass.add_textures(&device, &queue, &textures_delta);
 
             let meshes = egui_ctx.tessellate(shapes);
-            egui_rpass.update_texture(&device, &queue, &egui_ctx.font_image());
-            egui_rpass.update_user_textures(&device, &queue);
             let screen_descriptor = ScreenDescriptor {
                 physical_width: surface_config.width,
                 physical_height: surface_config.height,
@@ -166,6 +180,7 @@ fn main() {
                 &screen_descriptor,
                 Some(wgpu::Color::BLACK),
             );
+            egui_rpass.remove_textures(textures_delta);
             let command = encoder.finish();
             queue.submit(iter::once(command));
             output_frame.present();
@@ -200,8 +215,8 @@ fn main() {
                                     let mut pmx_path = None;
                                     for name in ar.file_names() {
                                         println!("zip_content {}", name);
-                                        if name.contains("pmx"){
-                                            pmx_path=Some(name.to_owned());
+                                        if name.contains("pmx") {
+                                            pmx_path = Some(name.to_owned());
                                         }
                                     }
 
@@ -212,9 +227,11 @@ fn main() {
                                                     pmx_file,
                                                 )
                                             {
-                                                let (mi,reader)=reader.read();
+                                                let (mi, reader) = reader.read();
 
-                                                models.write().map(|mut lock|{lock.new_model(&mi.name)});
+                                                models
+                                                    .write()
+                                                    .map(|mut lock| lock.new_model(&mi.name));
                                             }
                                         }
                                     }

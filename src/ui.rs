@@ -21,7 +21,7 @@ pub(crate) enum TabKind {
 }
 pub(crate) struct Tabs(pub TabKind);
 impl Tabs {
-    pub(crate) fn display_tabs(&mut self, ctx: &egui::CtxRef) {
+    pub(crate) fn display_tabs(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::new(TopBottomSide::Top, "Tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.0, TabKind::Info, "Info");
