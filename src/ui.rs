@@ -2,6 +2,7 @@ use crate::global_model_state::BoneTree;
 use egui::containers::panel::TopBottomSide;
 
 use PMXUtil::types::{Bone, BoneFlags, Header, ModelInfo, Vertex, VertexWeight};
+use egui::Vec2;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TabKind {
@@ -351,21 +352,39 @@ impl PMXVertexView {
         self.bones = bones.to_vec();
     }
     pub fn display(&mut self, ui: &mut egui::Ui) {
-        egui::SidePanel::left("Vertices").show_inside(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for (index, vertices) in self.vertices.iter().enumerate() {
-                    if ui
-                        .add(egui::SelectableLabel::new(
-                            self.selected == index,
-                            format!("{}: {:?}", index, vertices.position),
-                        ))
-                        .clicked()
-                    {
-                        self.selected = index;
-                    }
-                }
+        let text_style = egui::TextStyle::Small;
+        let row_height = ui.text_style_height(&text_style);
+        egui::SidePanel::left("Vertices")
+            .show_inside(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(ui.available_height() - 32.0)
+                    .stick_to_right()
+                    .show_rows(ui, row_height, self.vertices.len(), |ui, row_range| {
+                        for (index, vertices) in self
+                            .vertices
+                            .iter()
+                            .enumerate()
+                            .skip(row_range.start)
+                            .take(row_range.end)
+                        {
+                            if ui
+                                .add_sized(Vec2::new(200.0,20.0),egui::SelectableLabel::new(
+                                    self.selected == index,
+                                    egui::WidgetText::RichText(
+                                        egui::RichText::new(format!(
+                                            "{:06}: [{:.7},{:.7},{:.7}]",
+                                            index, vertices.position[0],vertices.position[1],vertices.position[2]
+                                        ))
+                                        .text_style(egui::TextStyle::Monospace),
+                                    ),
+                                ))
+                                .clicked()
+                            {
+                                self.selected = index;
+                            }
+                        }
+                    });
             });
-        });
         let mut cloned_vertex = self.vertices[self.selected].clone();
         let mut weight_kind: WeightKind = cloned_vertex.weight_type.into();
         let mut weight_parameters: WeightParameters = cloned_vertex.weight_type.into();
